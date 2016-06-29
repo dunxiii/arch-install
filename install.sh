@@ -3,13 +3,6 @@ set -e
 
 source ./vars.sh
 
-# XXX --------------------------------------------------------------------------
-
-umount -l "${MOUNT_POINT}" || true
-swapoff "${DEV_SWAP}" || true
-
-# Environment variables --------------------------------------------------------
-
 export HOSTNAME
 export USER
 export TIMEZONE
@@ -18,11 +11,23 @@ export LOCALE
 export SHELL
 export LC_ALL
 
-# DEVICES ----------------------------------------------------------------------
+unmount_devices() {
+
+echo -e "\nUnmounting devices:"
+echo -e "----------------------------------------"
+
+umount --verbose --lazy "${MOUNT_POINT}"
+swapoff --ifexists
+
+}
+
+prepare_devices() {
+
+echo -e "\nPreparing devices"
+echo -e "----------------------------------------"
 
 ## Make filesystems
-#mkfs.fat -F32 "${DEV_BOOT}"
-mkfs.ext4 "${DEV_BOOT}"
+mkfs.fat -F32 "${DEV_BOOT}"
 mkfs.btrfs -f "${DEV_ROOT}"
 mkfs.ext4 "${DEV_HOME}"
 
@@ -43,7 +48,12 @@ mount "${DEV_BOOT}" "${MOUNT_POINT}/boot"
 mkswap "${DEV_SWAP}"
 swapon "${DEV_SWAP}"
 
-# Get fastest mirrors ----------------------------------------------------------
+}
+
+update_mirrors() {
+
+echo -e "\nUpdating mirrors"
+echo -e "----------------------------------------"
 
 pacman -Syy
 
@@ -53,11 +63,21 @@ reflector --sort score --threads 5 -a 10 -c SE -c DK -c NO -c FI -n 15 --save /e
 
 pacman -Syy
 
-# Base packages ----------------------------------------------------------------
+}
+
+install_base() {
+
+echo -e "\nInstalling base packages"
+echo -e "----------------------------------------"
 
 pacstrap "${MOUNT_POINT}" base base-devel btrfs-progs
 
-# Base config ------------------------------------------------------------------
+}
+
+configure_base() {
+
+echo -e "\nConfiguring base"
+echo -e "----------------------------------------"
 
 # fstab
 genfstab -U "${MOUNT_POINT}" >> "${MOUNT_POINT}/etc/fstab"
@@ -103,17 +123,26 @@ chmod u-w /etc/sudoers
 
 EOF
 
-# Extra packages ---------------------------------------------------------------
+}
+
+install_extra() {
+
+echo -e "\nInstalling extra packages"
+echo -e "----------------------------------------"
 
 pacstrap "${MOUNT_POINT}" "${pacstrap_packages[@]}"
-
 arch-chroot "${MOUNT_POINT}" /bin/bash -c "pip3 install ${pip_packages[@]}"
 
-# Extra config -----------------------------------------------------------------
+}
+
+configure_extra() {
+
+echo -e "\nConfiguring extra"
+echo -e "----------------------------------------"
 
 arch-chroot "${MOUNT_POINT}" /bin/bash -e <<'EOF'
 
-## TLP
+# TLP
 sed -i -re 's/(RUNTIME_PM_DRIVER_BLACKLIST=)[^=]*$/\1"radeon mei_me nouveau"/' "/etc/default/tlp"
 
 # acpi
@@ -151,16 +180,21 @@ ln -s /run/media /media
 
 EOF
 
-# GRUB -------------------------------------------------------------------------
+}
+
+install_bootloader() {
+
+echo -e "\nInstalling bootloader"
+echo -e "----------------------------------------"
 
 arch-chroot "${MOUNT_POINT}" /bin/bash -e <<'EOF'
 
-## Install GRUB as bootloader
+# Install GRUB as bootloader
 #grub-install --target=x86_64-efi --efi-directory=/boot --bootloader-id=grub
 grub-install /dev/sda
 sed -i -re 's/(GRUB_CMDLINE_LINUX_DEFAULT=)[^=]*$/\1"quiet loglevel=3 acpi_osi="/' /etc/default/grub
 
-## Configure GRUB
+# Configure GRUB
 sed -i -re 's,^(GRUB_CMDLINE_LINUX=)[^=]*$,\1"cryptdevice=UUID=$(blkid -s UUID -o value "${DEV_CRYPT}"):lvm",' /etc/default/grub
 sed -i -re 's/(GRUB_TIMEOUT=)[^=]*$/\10/' /etc/default/grub
 sed -i '/^#GRUB_HIDDEN_TIMEOUT=/s/^#//' /etc/default/grub
@@ -171,7 +205,12 @@ grub-mkconfig -o /boot/grub/grub.cfg
 
 EOF
 
-# User creation and configuration ----------------------------------------------
+}
+
+create_user() {
+
+echo -e "\nCreating user"
+echo -e "----------------------------------------"
 
 arch-chroot "${MOUNT_POINT}" /bin/bash -e <<'EOF'
 
@@ -179,10 +218,16 @@ groupadd sudo
 
 useradd -m -G sudo -s $(which zsh) "${USER}"
 
-[[ $(which virtualbox 2>/dev/null) ]]   && gpasswd -a "${USER}" vboxusers   || true
-[[ $(which docker 2>/dev/null) ]]       && gpasswd -a "${USER}" docker      || true
+[[ $(which virtualbox 2>/dev/null) ]] && gpasswd -a "${USER}" vboxusers
 
 EOF
+
+}
+
+configure_user_home() {
+
+echo -e "\nConfiguring users home directory"
+echo -e "----------------------------------------"
 
 # Execute these commands as user
 arch-chroot "${MOUNT_POINT}" /bin/bash -c "su - ${USER}" <<'EOF'
@@ -208,12 +253,18 @@ curl -fLo ~/.config/nvim/autoload/plug.vim --create-dirs https://raw.githubuserc
 
 EOF
 
-# AUR packages -----------------------------------------------------------------
+}
+
+install_aur_packages() {
+
+echo -e "\nInstalling AUR packages"
+echo -e "----------------------------------------"
 
 # USER need to source vars
 cp ./vars.sh "${MOUNT_POINT}/home/${USER}/"
 cp ./vars.sh "${MOUNT_POINT}/root/"
 
+# TODO: test and remove -x
 arch-chroot "${MOUNT_POINT}" /bin/bash -ex <<'EOF'
 
 # TODO: remove??
@@ -248,7 +299,12 @@ mv /etc/sudoers{.org,}
 
 EOF
 
-# Enable systemd services ------------------------------------------------------
+}
+
+enable_services() {
+
+echo -e "\nEnabling services"
+echo -e "----------------------------------------"
 
 arch-chroot "${MOUNT_POINT}" /bin/bash -e <<EOF
 
@@ -259,7 +315,12 @@ systemctl enable tlp
 
 EOF
 
-# Cleanup ----------------------------------------------------------------------
+}
+
+cleanup() {
+
+echo -e "\nCleanup files"
+echo -e "----------------------------------------"
 
 rm -rf "${MOUNT_POINT}/root/*.sh"
 rm -rf "${MOUNT_POINT}/home/${USER}/*.sh"
@@ -270,4 +331,22 @@ echo -e "Your system is now ready!"
 echo -e "Now set password for root and ${USER}"
 echo -e "And then just reboot into your new system"
 
-exit
+}
+
+echo -e "\n\n"
+
+unmount_devices
+prepare_devices
+update_mirrors
+install_base
+configure_base
+install_extra
+configure_extra
+install_bootloader
+create_user
+configure_user_home
+install_aur_packages
+enable_services
+cleanup
+
+exit 0
