@@ -13,8 +13,7 @@ SHELL=/usr/bin/zsh
 MOUNT_POINT=/mnt
 DEV_BOOT=/dev/sda1
 DEV_CRYPT=/dev/sda2
-DEV_ROOT=/dev/mapper/vg-arch--root
-DEV_HOME=/dev/mapper/vg-arch--home
+DEV_ROOT=/dev/mapper/vg-arch
 DEV_SWAP=/dev/mapper/vg-swap
 
 pacstrap_packages=(

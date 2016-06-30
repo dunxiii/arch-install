@@ -1,6 +1,8 @@
 #!/bin/bash
 set -e
 
+SECONDS=0
+
 source ./vars.sh
 
 export HOSTNAME
@@ -16,10 +18,13 @@ unmount_devices() {
 echo -e "\nUnmounting devices:"
 echo -e "----------------------------------------"
 
-umount --verbose --lazy "${MOUNT_POINT}"
-swapoff --ifexists
+umount --verbose --lazy "${MOUNT_POINT}" || true
+swapoff --all
 
 }
+
+# TODO finish
+# TODO rename, make another for other setup?
 
 prepare_devices() {
 
@@ -29,20 +34,22 @@ echo -e "----------------------------------------"
 ## Make filesystems
 mkfs.fat -F32 "${DEV_BOOT}"
 mkfs.btrfs -f "${DEV_ROOT}"
-mkfs.ext4 "${DEV_HOME}"
 
 ## Mount partitions
 mount "${DEV_ROOT}" "${MOUNT_POINT}"
 btrfs subvolume create "${MOUNT_POINT}/ROOT"
 
 umount "${DEV_ROOT}"
-mount "${DEV_ROOT}" "${MOUNT_POINT}" -o ssd,compress=lzo,subvol=ROOT
+mount "${DEV_ROOT}" "${MOUNT_POINT}" -o ssd,compress=lzo,noatime,subvol=ROOT
 
-mkdir "${MOUNT_POINT}/home"
-mount "${DEV_HOME}" "${MOUNT_POINT}/home"
+btrfs subvolume create "${MOUNT_POINT}/home"
+btrfs subvolume create "${MOUNT_POINT}/tmp"
 
-mkdir "${MOUNT_POINT}/boot"
+mkdir "${MOUNT_POINT}/{boot,home,tmp}"
+
 mount "${DEV_BOOT}" "${MOUNT_POINT}/boot"
+mount "${DEV_ROOT}" "${MOUNT_POINT}" -o ssd,compress=lzo,noatime,subvol=home
+mount "${DEV_ROOT}" "${MOUNT_POINT}" -o ssd,compress=lzo,noatime,subvol=tmp
 
 ## Enable swap
 mkswap "${DEV_SWAP}"
@@ -333,20 +340,24 @@ echo -e "And then just reboot into your new system"
 
 }
 
-echo -e "\n\n"
+echo -e "\n"
 
 unmount_devices
 prepare_devices
-update_mirrors
-install_base
-configure_base
-install_extra
-configure_extra
-install_bootloader
-create_user
-configure_user_home
-install_aur_packages
-enable_services
-cleanup
+#update_mirrors
+#install_base
+#configure_base
+#install_extra
+#configure_extra
+#install_bootloader
+#create_user
+#configure_user_home
+#install_aur_packages
+#enable_services
+#cleanup
+
+echo -e "\nTotal time:"
+echo -e "----------------------------------------"
+echo -e "$((${SECONDS} / 60))m $((${SECONDS} % 60))s"
 
 exit 0
