@@ -23,9 +23,6 @@ swapoff --all
 
 }
 
-# TODO finish
-# TODO rename, make another for other setup?
-
 prepare_devices() {
 
 echo -e "\nPreparing devices"
@@ -33,7 +30,7 @@ echo -e "----------------------------------------"
 
 ## Make filesystems
 mkfs.fat -F32 "${DEV_BOOT}"
-mkfs.btrfs -f "${DEV_ROOT}"
+mkfs.btrfs -qf "${DEV_ROOT}"
 
 ## Mount partitions
 mount "${DEV_ROOT}" "${MOUNT_POINT}"
@@ -44,12 +41,13 @@ mount "${DEV_ROOT}" "${MOUNT_POINT}" -o ssd,compress=lzo,noatime,subvol=ROOT
 
 btrfs subvolume create "${MOUNT_POINT}/home"
 btrfs subvolume create "${MOUNT_POINT}/tmp"
+btrfs subvolume create "${MOUNT_POINT}/.snapshots"
 
-mkdir "${MOUNT_POINT}/{boot,home,tmp}"
-
+mkdir "${MOUNT_POINT}/boot"
 mount "${DEV_BOOT}" "${MOUNT_POINT}/boot"
-mount "${DEV_ROOT}" "${MOUNT_POINT}" -o ssd,compress=lzo,noatime,subvol=home
-mount "${DEV_ROOT}" "${MOUNT_POINT}" -o ssd,compress=lzo,noatime,subvol=tmp
+
+mkdir -p "${MOUNT_POINT}/mnt/btrfs"
+mount "${DEV_ROOT}" "${MOUNT_POINT}/mnt/btrfs"
 
 ## Enable swap
 mkswap "${DEV_SWAP}"
@@ -82,6 +80,8 @@ pacstrap "${MOUNT_POINT}" base base-devel btrfs-progs
 }
 
 configure_base() {
+
+# TODO: fix SSH...
 
 echo -e "\nConfiguring base"
 echo -e "----------------------------------------"
@@ -138,7 +138,10 @@ echo -e "\nInstalling extra packages"
 echo -e "----------------------------------------"
 
 pacstrap "${MOUNT_POINT}" "${pacstrap_packages[@]}"
-arch-chroot "${MOUNT_POINT}" /bin/bash -c "pip3 install ${pip_packages[@]}"
+
+for pkg in ${pip_packages[@]}; do
+    arch-chroot "${MOUNT_POINT}" /bin/bash -c "LC_ALL=en_US.utf8 pip3 install ${pkg}"
+done
 
 }
 
@@ -165,25 +168,16 @@ for line in "${!ACPI_HANDLER_VALUE[@]}"; do
 done
 
 # logind
-for line in "HandlePowerKey" "HandleLidSwitch="; do
-    sed -i '/^#'${line}'/s/^#//' /etc/systemd/logind.conf
-done
+sed -i '/^#HandlePowerKey/s/^#//' /etc/systemd/logind.conf
+sed -i '/^#HandleLidSwitch=/s/^#//' /etc/systemd/logind.conf
 
-declare -A ASSING_VALUE=(
-    ["HandlePowerKey"]="ignore"
-    ["HandleLidSwitch"]="ignore"
-)
-
-for line in ${!ASSING_VALUE[@]}; do
-    sed -i -re 's/('${line}'=)[^=]*$/\1'${ASSING_VALUE[${line}]}'/' /etc/systemd/logind.conf
-done
+sed -i -re 's/(HandlePowerKey=)[^=]*$/\1ignore/' /etc/systemd/logind.conf
+sed -i -re 's/(HandleLidSwitch=)[^=]*$/\1ignore/' /etc/systemd/logind.conf
 
 # users-dirs
 for dir in DESKTOP TEMPLATES MUSIC VIDEOS; do
     sed -i -re "/${dir}/s/^/#/" /etc/xdg/user-dirs.defaults
 done
-
-ln -s /run/media /media
 
 EOF
 
@@ -194,11 +188,12 @@ install_bootloader() {
 echo -e "\nInstalling bootloader"
 echo -e "----------------------------------------"
 
-arch-chroot "${MOUNT_POINT}" /bin/bash -e <<'EOF'
+arch-chroot "${MOUNT_POINT}" /bin/bash -e <<EOF
 
 # Install GRUB as bootloader
-#grub-install --target=x86_64-efi --efi-directory=/boot --bootloader-id=grub
-grub-install /dev/sda
+grub-install --target=x86_64-efi --efi-directory=/boot --bootloader-id=grub
+#grub-install /dev/sda
+#grub-install --target=i386-pc /dev/sda
 sed -i -re 's/(GRUB_CMDLINE_LINUX_DEFAULT=)[^=]*$/\1"quiet loglevel=3 acpi_osi="/' /etc/default/grub
 
 # Configure GRUB
@@ -219,13 +214,13 @@ create_user() {
 echo -e "\nCreating user"
 echo -e "----------------------------------------"
 
-arch-chroot "${MOUNT_POINT}" /bin/bash -e <<'EOF'
+arch-chroot "${MOUNT_POINT}" /bin/bash -e <<EOF
 
 groupadd sudo
 
-useradd -m -G sudo -s $(which zsh) "${USER}"
+useradd -m -G sudo -s \$(which zsh) "${USER}"
 
-[[ $(which virtualbox 2>/dev/null) ]] && gpasswd -a "${USER}" vboxusers
+[[ \$(which virtualbox 2>/dev/null) ]] && gpasswd -a "${USER}" vboxusers
 
 EOF
 
@@ -253,7 +248,7 @@ cd ~/Git/dotfiles && git remote set-url origin git@github.com:dunxiii/dotfiles.g
 
 # Install oh my zsh
 git clone git://github.com/robbyrussell/oh-my-zsh.git ~/Git/oh-my-zsh
-cp -r ~/Git/oh-my-zsh ~/.zshrc
+ln -s ~/Git/oh-my-zsh ~/.oh-my-zsh
 
 # Install vim-plug
 curl -fLo ~/.config/nvim/autoload/plug.vim --create-dirs https://raw.githubusercontent.com/junegunn/vim-plug/master/plug.vim
@@ -267,44 +262,31 @@ install_aur_packages() {
 echo -e "\nInstalling AUR packages"
 echo -e "----------------------------------------"
 
-# USER need to source vars
-cp ./vars.sh "${MOUNT_POINT}/home/${USER}/"
-cp ./vars.sh "${MOUNT_POINT}/root/"
-
-# TODO: test and remove -x
-arch-chroot "${MOUNT_POINT}" /bin/bash -ex <<'EOF'
-
-# TODO: remove??
-#source ~/vars.sh
-
 # Temporary sudoers
-cp /etc/sudoers{,.org}
-chmod u+w /etc/sudoers
-echo "Defaults visiblepw" >> /etc/sudoers
-echo "%sudo   ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
-chmod u-w /etc/sudoers
+cp "${MOUNT_POINT}/etc/sudoers"{,.org}
+chmod u+w "${MOUNT_POINT}/etc/sudoers"
+echo "Defaults visiblepw" >> "${MOUNT_POINT}/etc/sudoers"
+echo "%sudo   ALL=(ALL) NOPASSWD: ALL" >> "${MOUNT_POINT}/etc/sudoers"
+chmod u-w "${MOUNT_POINT}/etc/sudoers"
 
 # AUR Helper: pacaur
-su -s /bin/bash - ${USER} <<'EOC'
+arch-chroot "${MOUNT_POINT}" /bin/bash -c "su - ${USER}" <<EOF
 
     # Fix for cower
     gpg --recv-keys --keyserver hkp://pgp.mit.edu 1EB2638FF56C0C53
 
     source /etc/profile.d/perlbin.sh
-    source ~/vars.sh
 
-    for pkg in "${pacaur_packages[@]}"; do
-        git clone "https://aur.archlinux.org/${pkg}.git"
-        cd "${pkg}" && makepkg --noconfirm -sric
-        cd .. && rm -rf "${pkg}"
+    for pkg in ${pacaur_packages[@]}; do
+        git clone "https://aur.archlinux.org/\${pkg}.git"
+        cd "\${pkg}" && makepkg --noconfirm -sric
+        cd .. && rm -rf "\${pkg}"
     done
 
     pacaur --noconfirm -y "${aur_packages[@]}"
-EOC
-
-mv /etc/sudoers{.org,}
-
 EOF
+
+mv "${MOUNT_POINT}/etc/sudoers"{.org,}
 
 }
 
@@ -329,14 +311,13 @@ cleanup() {
 echo -e "\nCleanup files"
 echo -e "----------------------------------------"
 
-rm -rf "${MOUNT_POINT}/root/*.sh"
-rm -rf "${MOUNT_POINT}/home/${USER}/*.sh"
+if [[ -n "$(arch-chroot "${MOUNT_POINT}" /bin/bash -c 'pacman -Qqtd')" ]]; then
+    arch-chroot "${MOUNT_POINT}" /bin/bash -c 'pacman --noconfirm -Rs $(pacman -Qqtd) 2>/dev/null'
+fi
 
-#arch-chroot "${MOUNT_POINT}" /bin/bash -c 'pacman -Rs $(pacman -Qqtd) 2>/dev/null' || true
-
-echo -e "Your system is now ready!"
+echo -e "\nYour system is now ready!"
 echo -e "Now set password for root and ${USER}"
-echo -e "And then just reboot into your new system"
+echo -e "And then reboot into your new system and deploy dotfiles"
 
 }
 
@@ -344,17 +325,17 @@ echo -e "\n"
 
 unmount_devices
 prepare_devices
-#update_mirrors
-#install_base
-#configure_base
-#install_extra
-#configure_extra
-#install_bootloader
-#create_user
-#configure_user_home
-#install_aur_packages
-#enable_services
-#cleanup
+update_mirrors
+install_base
+configure_base
+install_extra
+configure_extra
+install_bootloader
+create_user
+configure_user_home
+install_aur_packages
+enable_services
+cleanup
 
 echo -e "\nTotal time:"
 echo -e "----------------------------------------"

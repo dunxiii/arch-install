@@ -46,6 +46,7 @@ pacstrap_packages=(
     pulseaudio
     redshift
     reflector
+    rofi
     scrot
     tlp
     xclip
@@ -89,8 +90,14 @@ pacstrap_packages=(
     linux-headers
     qt4
 
+    # if arch is run inside virtualbox
+    virtualbox-guest-utils
+
     # redshift-gtk deps
     python-gobject
+
+    # remmina copy paste fix
+    intltool
 
     # Sysadmin
     bind-tools
@@ -98,6 +105,7 @@ pacstrap_packages=(
     nfs-utils
     nmap
     pass
+    remmina
     sshfs
     sshpass
     vagrant
@@ -115,8 +123,10 @@ pacstrap_packages=(
 )
 
 pip_packages=(
+    setuptools
     basiciw
     colour
+    i3ipc
     i3pystatus
     netifaces
     psutil
@@ -131,8 +141,6 @@ aur_packages=(
     chromium-pepper-flash
     gitkraken
     insync
-    remmina-git
-    rofi-git
     ttf-font-awesome
 #    hunspell-sv
 )
