@@ -1,9 +1,10 @@
 #!/bin/bash
-set -e
+set -eua
 
 SECONDS=0
 
 source ./vars.sh
+source ./disk-layouts.sh
 
 export HOSTNAME
 export USER
@@ -20,38 +21,6 @@ echo -e "----------------------------------------"
 
 umount --verbose --lazy "${MOUNT_POINT}" || true
 swapoff --all
-
-}
-
-prepare_devices() {
-
-echo -e "\nPreparing devices"
-echo -e "----------------------------------------"
-
-## Make filesystems
-mkfs.fat -F32 "${DEV_BOOT}"
-mkfs.btrfs -qf "${DEV_ROOT}"
-
-## Mount partitions
-mount "${DEV_ROOT}" "${MOUNT_POINT}"
-btrfs subvolume create "${MOUNT_POINT}/ROOT"
-
-umount "${DEV_ROOT}"
-mount "${DEV_ROOT}" "${MOUNT_POINT}" -o ssd,compress=lzo,noatime,subvol=ROOT
-
-btrfs subvolume create "${MOUNT_POINT}/home"
-btrfs subvolume create "${MOUNT_POINT}/tmp"
-btrfs subvolume create "${MOUNT_POINT}/.snapshots"
-
-mkdir "${MOUNT_POINT}/boot"
-mount "${DEV_BOOT}" "${MOUNT_POINT}/boot"
-
-mkdir -p "${MOUNT_POINT}/mnt/btrfs"
-mount "${DEV_ROOT}" "${MOUNT_POINT}/mnt/btrfs"
-
-## Enable swap
-mkswap "${DEV_SWAP}"
-swapon "${DEV_SWAP}"
 
 }
 
@@ -119,6 +88,7 @@ sed -i "/^HOOKS=/s/block/block encrypt lvm2/g" /etc/mkinitcpio.conf
 
 # BTRFS fix
 sed -i "/^HOOKS=/s/fsck/btrfs/g" /etc/mkinitcpio.conf
+sed -i -re "s/(BINARIES=)[^=]*$/\1\"\/usr\/bin\/btrfsck\"/" /etc/mkinitcpio.conf
 
 # initramfs
 mkinitcpio -p linux
@@ -189,7 +159,7 @@ echo -e "----------------------------------------"
 arch-chroot "${MOUNT_POINT}" /bin/bash -e <<EOF
 
 # Install GRUB as bootloader
-grub-install --target=x86_64-efi --efi-directory=/boot --bootloader-id=grub
+grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=grub
 #grub-install /dev/sda
 #grub-install --target=i386-pc /dev/sda
 sed -i -re 's/(GRUB_CMDLINE_LINUX_DEFAULT=)[^=]*$/\1"quiet loglevel=3 acpi_osi="/' /etc/default/grub
@@ -322,22 +292,36 @@ echo -e "And then reboot into your new system and deploy dotfiles"
 
 }
 
-echo -e "\n"
+main() {
 
-unmount_devices
-prepare_devices
-update_mirrors
-install_base
-configure_base
-install_extra
-configure_extra
-install_bootloader
-create_user
-configure_user_home
-install_aur_packages
-enable_services
-cleanup
+    echo -e "\n"
 
+    DISK_LAYOUT="btrfs_lvm_luks"
+
+    # Installation steps
+    #-------------------
+    unmount_devices
+    "${DISK_LAYOUT}"
+    update_mirrors
+    install_base
+    configure_base
+    install_extra
+    configure_extra
+    install_bootloader
+    create_user
+    configure_user_home
+    install_aur_packages
+    enable_services
+
+    if [[ "${POST_DISK_LAYOUT}" = true ]]; then
+        "${DISK_LAYOUT}" "POST"
+    fi
+
+    #cleanup
+
+}
+
+main
 echo -e "\nTotal time:"
 echo -e "----------------------------------------"
 echo -e "$((${SECONDS} / 60))m $((${SECONDS} % 60))s"
