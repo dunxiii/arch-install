@@ -124,9 +124,7 @@ sed -i "/^HOOKS=/s/fsck/btrfs/g" /etc/mkinitcpio.conf
 mkinitcpio -p linux
 
 # sudo
-chmod u+w /etc/sudoers
-sed -i "/^# %sudo.*ALL=(ALL) ALL/s/^# //" /etc/sudoers
-chmod u-w /etc/sudoers
+echo "%sudo ALL=(ALL:ALL) ALL" | (EDITOR="tee -a" visudo)
 
 EOF
 
@@ -264,10 +262,13 @@ echo -e "----------------------------------------"
 
 # Temporary sudoers
 cp "${MOUNT_POINT}/etc/sudoers"{,.org}
-chmod u+w "${MOUNT_POINT}/etc/sudoers"
-echo "Defaults visiblepw" >> "${MOUNT_POINT}/etc/sudoers"
-echo "%sudo   ALL=(ALL) NOPASSWD: ALL" >> "${MOUNT_POINT}/etc/sudoers"
-chmod u-w "${MOUNT_POINT}/etc/sudoers"
+
+arch-chroot "${MOUNT_POINT}" /bin/bash -e <<'EOF'
+
+echo "Defaults visiblepw" | (EDITOR="tee -a" visudo)
+echo "%sudo   ALL=(ALL) NOPASSWD: ALL" | (EDITOR="tee -a" visudo)
+
+EOF
 
 # AUR Helper: pacaur
 arch-chroot "${MOUNT_POINT}" /bin/bash -c "su - ${USER}" <<EOF
