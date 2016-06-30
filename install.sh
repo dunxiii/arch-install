@@ -125,7 +125,7 @@ mkinitcpio -p linux
 
 # sudo
 chmod u+w /etc/sudoers
-sed -i "/^# %sudo   ALL=(ALL) ALL/s/^# //" /etc/sudoers
+sed -i "/^# %sudo.*ALL=(ALL) ALL/s/^# //" /etc/sudoers
 chmod u-w /etc/sudoers
 
 EOF
