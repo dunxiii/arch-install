@@ -137,7 +137,7 @@ echo -e "----------------------------------------"
 
 pacstrap "${MOUNT_POINT}" "${pacstrap_packages[@]}"
 
-for pkg in ${pip_packages[@]}; do
+for pkg in "${pip_packages[@]}"; do
     arch-chroot "${MOUNT_POINT}" /bin/bash -c "LC_ALL=en_US.utf8 pip3 install ${pkg}"
 done
 
