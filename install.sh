@@ -292,24 +292,36 @@ echo -e "And then reboot into your new system and deploy dotfiles"
 
 }
 
-echo -e "\n"
+main() {
 
-unmount_devices
+    echo -e "\n"
 
-btrfs_lvm_luks
+    DISK_LAYOUT="btrfs_lvm_luks"
 
-update_mirrors
-#install_base
-#configure_base
-#install_extra
-#configure_extra
-#install_bootloader
-#create_user
-#configure_user_home
-#install_aur_packages
-#enable_services
-#cleanup
+    # Installation steps
+    #-------------------
+    unmount_devices
+    "${DISK_LAYOUT}"
+    update_mirrors
+    install_base
+    configure_base
+    install_extra
+    configure_extra
+    install_bootloader
+    create_user
+    configure_user_home
+    install_aur_packages
+    enable_services
 
+    if [[ "${POST_DISK_LAYOUT}" = true ]]; then
+        "${DISK_LAYOUT}" "POST"
+    fi
+
+    #cleanup
+
+}
+
+main
 echo -e "\nTotal time:"
 echo -e "----------------------------------------"
 echo -e "$((${SECONDS} / 60))m $((${SECONDS} % 60))s"
