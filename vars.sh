@@ -9,8 +9,11 @@ KEYMAP="sv-latin1"
 LOCALE="en_US.UTF-8"
 LC_ALL="C"
 SHELL=/usr/bin/zsh
-
+UEFI=false
 MOUNT_POINT=/mnt
+
+#DISK_LAYOUT="btrfs_lvm_luks"
+DISK_LAYOUT="btrfs_luks"
 
 pacstrap_packages=(
     # Drivers
@@ -71,7 +74,6 @@ pacstrap_packages=(
     terminator
     transmission-gtk
     vim
-    virtualbox
     virtviewer
     zathura-pdf-mupdf
 
@@ -82,12 +84,14 @@ pacstrap_packages=(
     # i3pystatus deps
     wireless_tools
 
-    # virtualbox deps
-    linux-headers
+    # virtualbox and denpendencies
     qt4
+    linux-headers
+    virtualbox
 
     # if arch is run inside virtualbox
-    virtualbox-guest-utils
+    #virtualbox-guest-modules-arch
+    #virtualbox-guest-utils
 
     # redshift-gtk deps
     python-gobject
@@ -119,7 +123,7 @@ pacstrap_packages=(
 )
 
 pip_packages=(
-    setuptools
+    #setuptools
     basiciw
     colour
     i3ipc

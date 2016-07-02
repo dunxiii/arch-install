@@ -1,5 +1,5 @@
-#!/bin/bash
-set -eua
+#!/usr/bin/env bash
+set -e
 
 SECONDS=0
 
@@ -50,8 +50,6 @@ pacstrap "${MOUNT_POINT}" base base-devel btrfs-progs
 
 configure_base() {
 
-# TODO: fix SSH...
-
 echo -e "\nConfiguring base"
 echo -e "----------------------------------------"
 
@@ -59,8 +57,6 @@ echo -e "----------------------------------------"
 genfstab -U "${MOUNT_POINT}" >> "${MOUNT_POINT}/etc/fstab"
 
 arch-chroot "${MOUNT_POINT}" /bin/bash -e <<'EOF'
-
-locale
 
 # locale & keymap
 sed -i "/^#${LOCALE} UTF-8/s/^#//" /etc/locale.gen
@@ -73,6 +69,7 @@ ln -s /usr/share/zoneinfo/${TIMEZONE} /etc/localtime
 hwclock --systohc --utc
 
 # hostname
+hostname "${HOSTNAME}"
 echo "${HOSTNAME}" > /etc/hostname
 sed -i "s/\(localhost$\)/\1 ${HOSTNAME}/" /etc/hosts
 
@@ -106,6 +103,8 @@ echo -e "\nInstalling extra packages"
 echo -e "----------------------------------------"
 
 pacstrap "${MOUNT_POINT}" "${pacstrap_packages[@]}"
+
+pacstrap "${MOUNT_POINT}" "${pacstrap_pre_packages[@]}"
 
 for pkg in "${pip_packages[@]}"; do
     arch-chroot "${MOUNT_POINT}" /bin/bash -c "LC_ALL=en_US.utf8 pip3 install ${pkg}"
@@ -158,19 +157,20 @@ echo -e "----------------------------------------"
 
 arch-chroot "${MOUNT_POINT}" /bin/bash -e <<EOF
 
-# Install GRUB as bootloader
-grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=grub
-#grub-install /dev/sda
-#grub-install --target=i386-pc /dev/sda
-sed -i -re 's/(GRUB_CMDLINE_LINUX_DEFAULT=)[^=]*$/\1"quiet loglevel=3 acpi_osi="/' /etc/default/grub
-
 # Configure GRUB
-sed -i -re 's,^(GRUB_CMDLINE_LINUX=)[^=]*$,\1"cryptdevice=UUID=$(blkid -s UUID -o value "${DEV_CRYPT}"):lvm",' /etc/default/grub
+sed -i -re 's,^(GRUB_CMDLINE_LINUX=)[^=]*$,\1"cryptdevice=UUID=$(blkid -s UUID -o value "${DEV_CRYPT}"):cryptroot",' /etc/default/grub
+sed -i -re 's/(GRUB_CMDLINE_LINUX_DEFAULT=)[^=]*$/\1"quiet loglevel=3 acpi_osi="/' /etc/default/grub
 sed -i -re 's/(GRUB_TIMEOUT=)[^=]*$/\10/' /etc/default/grub
 sed -i '/^#GRUB_HIDDEN_TIMEOUT=/s/^#//' /etc/default/grub
 sed -i -re 's/(GRUB_HIDDEN_TIMEOUT=)[^=]*$/\13/' /etc/default/grub
+echo "GRUB_ENABLE_CRYPTODISK=y" >> /etc/default/grub
 
-# Make config
+if [[ "${UEFI}" = false ]]; then
+    grub-install /dev/sda
+else
+    grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=grub
+fi
+
 grub-mkconfig -o /boot/grub/grub.cfg
 
 EOF
@@ -211,6 +211,9 @@ mkdir -p ~/{Bin,Git,Insync,.vim/undodir}
 # Get dotfiles
 git clone https://github.com/dunxiii/dotfiles.git ~/Git/dotfiles
 
+# Deploy dotfiles
+~/Git/dotfiles/install
+
 # Swhitch dotfiles from https to ssh
 cd ~/Git/dotfiles && git remote set-url origin git@github.com:dunxiii/dotfiles.git
 
@@ -232,6 +235,9 @@ echo -e "----------------------------------------"
 
 # Temporary sudoers
 cp "${MOUNT_POINT}/etc/sudoers"{,.org}
+
+# Disable compression of aur packages
+sed -i -re "s/(PKGEXT=)[^=]*$/\1'.pkg.tar'/" "${MOUNT_POINT}/etc/makepkg.conf"
 
 arch-chroot "${MOUNT_POINT}" /bin/bash -e <<'EOF'
 
@@ -256,6 +262,12 @@ arch-chroot "${MOUNT_POINT}" /bin/bash -c "su - ${USER}" <<EOF
 
     pacaur --noconfirm -y "${aur_packages[@]}"
 EOF
+
+# Empty pacaur cache
+rm -rf "${MOUNT_POINT}/home/${USER}/.cache/pacaur/"
+
+# Enable compression of aur packages
+sed -i -re "s/(PKGEXT=)[^=]*$/\1'.pkg.tar.xz'/" "${MOUNT_POINT}/etc/makepkg.conf"
 
 mv "${MOUNT_POINT}/etc/sudoers"{.org,}
 
@@ -286,9 +298,16 @@ if [[ -n "$(arch-chroot "${MOUNT_POINT}" /bin/bash -c 'pacman -Qqtd')" ]]; then
     arch-chroot "${MOUNT_POINT}" /bin/bash -c 'pacman --noconfirm -Rs $(pacman -Qqtd) 2>/dev/null'
 fi
 
+arch-chroot "${MOUNT_POINT}" /bin/bash -e <<EOF
+
+echo "root:123" | chpasswd
+echo "${USER}:123" | chpasswd
+
+EOF
+
 echo -e "\nYour system is now ready!"
-echo -e "Now set password for root and ${USER}"
-echo -e "And then reboot into your new system and deploy dotfiles"
+echo -e "Password for root and ${USER} is: 123"
+echo -e "Reboot into your new system and deploy dotfiles"
 
 }
 
@@ -296,14 +315,13 @@ main() {
 
     echo -e "\n"
 
-    DISK_LAYOUT="btrfs_lvm_luks"
-
     # Installation steps
     #-------------------
     unmount_devices
     "${DISK_LAYOUT}"
     update_mirrors
     install_base
+    "${DISK_LAYOUT}" "POST"
     configure_base
     install_extra
     configure_extra
@@ -312,12 +330,7 @@ main() {
     configure_user_home
     install_aur_packages
     enable_services
-
-    if [[ "${POST_DISK_LAYOUT}" = true ]]; then
-        "${DISK_LAYOUT}" "POST"
-    fi
-
-    #cleanup
+    cleanup
 
 }
 
