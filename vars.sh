@@ -9,8 +9,11 @@ KEYMAP="sv-latin1"
 LOCALE="en_US.UTF-8"
 LC_ALL="C"
 SHELL=/usr/bin/zsh
-
+UEFI=false
 MOUNT_POINT=/mnt
+
+#DISK_LAYOUT="btrfs_lvm_luks"
+DISK_LAYOUT="btrfs_luks"
 
 pacstrap_packages=(
     # Drivers
@@ -71,7 +74,6 @@ pacstrap_packages=(
     terminator
     transmission-gtk
     vim
-    virtualbox
     virtviewer
     zathura-pdf-mupdf
 
@@ -83,11 +85,12 @@ pacstrap_packages=(
     wireless_tools
 
     # virtualbox deps
+    virtualbox-host-modules-arch
     linux-headers
     qt4
 
     # if arch is run inside virtualbox
-    virtualbox-guest-utils
+    virtualbox-guest-modules-arch
 
     # redshift-gtk deps
     python-gobject
@@ -139,4 +142,11 @@ aur_packages=(
     insync
     ttf-font-awesome
 #    hunspell-sv
+)
+
+pacstrap_pre_packages=(
+    virtualbox
+
+    # if arch is run inside virtualbox
+    virtualbox-guest-utils
 )

@@ -42,42 +42,57 @@ btrfs_lvm_luks() {
 # https://bbs.archlinux.org/viewtopic.php?id=194491
 btrfs_luks() {
 
-    echo -e "\nPreparing devices"
-    echo -e "----------------------------------------"
-
     DEV_BOOT=/dev/sda1
     DEV_SWAP=/dev/sda2
     DEV_CRYPT=/dev/sda3
     DEV_ROOT=/dev/mapper/cryptroot
 
-    mkfs.fat -F32 "${DEV_BOOT}"
-    mkfs.btrfs -qf "${DEV_ROOT}"
+    if [[ ! "${1}" = POST ]]; then
 
-    # TODO Maybe have @arch_home... test current first
-    mount "${DEV_ROOT}" "${MOUNT_POINT}"
-    btrfs subvolume create "${MOUNT_POINT}/@arch"
-    btrfs subvolume create "${MOUNT_POINT}/@arch_snapshots"
+        echo -e "\nPreparing devices"
+        echo -e "----------------------------------------"
 
-    mkdir -p "${MOUNT_POINT}/.snapshots"
-    mkdir -p "${MOUNT_POINT}/boot"
+        mkfs.fat -F32 "${DEV_BOOT}"
+        mkfs.btrfs -qf "${DEV_ROOT}"
 
-    umount "${DEV_ROOT}"
-    mount "${DEV_ROOT}" "${MOUNT_POINT}" -o ssd,compress=lzo,noatime,subvol=arch
-    mount "${DEV_ROOT}" "${MOUNT_POINT}/.snapshots" -o ssd,compress=lzo,noatime,subvol=arch_snapshots
-    mount "${DEV_BOOT}" "${MOUNT_POINT}/boot/efi"
+        mount "${DEV_ROOT}" "${MOUNT_POINT}"
+        btrfs subvolume create "${MOUNT_POINT}/@arch"
+        btrfs subvolume create "${MOUNT_POINT}/@arch_snapshots"
 
-    mkdir -p "${MOUNT_POINT}/var/cache/pacman"
+        umount "${DEV_ROOT}"
+        mount "${DEV_ROOT}" "${MOUNT_POINT}" -o ssd,compress=lzo,noatime,subvol=@arch
 
-    # TODO Maybe add: /dev /proc /sys /run /mnt /media
-    btrfs subvolume create "${MOUNT_POINT}/home"
-    btrfs subvolume create "${MOUNT_POINT}/srv"
-    btrfs subvolume create "${MOUNT_POINT}/tmp"
-    btrfs subvolume create "${MOUNT_POINT}/var/abs"
-    btrfs subvolume create "${MOUNT_POINT}/var/cache/pacman/pkg"
-    btrfs subvolume create "${MOUNT_POINT}/var/tmp"
+        mkdir -p "${MOUNT_POINT}/.snapshots"
+        mkdir -p "${MOUNT_POINT}/boot/efi"
 
-    # TODO Maybe add crypto keyfile here, test current first
+        mount "${DEV_ROOT}" "${MOUNT_POINT}/.snapshots" -o ssd,compress=lzo,noatime,subvol=@arch_snapshots
+        mount "${DEV_BOOT}" "${MOUNT_POINT}/boot/efi"
 
-    ## Enable swap
-    # TODO
+        mkdir -p "${MOUNT_POINT}/var/cache/pacman"
+
+        btrfs subvolume create "${MOUNT_POINT}/home"
+        btrfs subvolume create "${MOUNT_POINT}/srv"
+        btrfs subvolume create "${MOUNT_POINT}/tmp"
+        btrfs subvolume create "${MOUNT_POINT}/var/abs"
+        btrfs subvolume create "${MOUNT_POINT}/var/cache/pacman/pkg"
+        btrfs subvolume create "${MOUNT_POINT}/var/tmp"
+
+        # Crypt file to not have to give passphrase two times
+        dd bs=512 count=4 if=/dev/urandom of=/crypto_keyfile.bin
+        chmod 000 /crypto_keyfile.bin
+        cryptsetup luksAddKey "${DEV_CRYPT}" /crypto_keyfile.bin
+
+    else
+
+        echo -e "\nPreparing devices finishing up"
+        echo -e "----------------------------------------"
+
+        # Enable swap
+        sed -i "/swap/s/^# //" "${MOUNT_POINT}/etc/crypttab"
+        sed -i "/swap/s/sdx4/${DEV_SWAP/*\//}/" "${MOUNT_POINT}/etc/crypttab"
+
+        echo "/dev/mapper/swap	none      	swap      	defaults  	0 0" >> "${MOUNT_POINT}/etc/fstab"
+
+        sed -i -re "s/(FILES=)[^=]*$/\1\"\/crypto_keyfile\.bin\"/" "${MOUNT_POINT}/etc/mkinitcpio.conf"
+    fi
 }
