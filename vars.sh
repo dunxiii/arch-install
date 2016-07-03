@@ -73,7 +73,6 @@ pacstrap_packages=(
     smplayer
     terminator
     transmission-gtk
-    vim
     virtviewer
     zathura-pdf-mupdf
 
@@ -143,4 +142,11 @@ aur_packages=(
     insync
     ttf-font-awesome
 #    hunspell-sv
+)
+
+pacstrap_pre_packages=(
+    virtualbox
+
+    # if arch is run inside virtualbox
+    virtualbox-guest-utils
 )
