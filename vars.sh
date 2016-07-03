@@ -144,3 +144,10 @@ aur_packages=(
     ttf-font-awesome
 #    hunspell-sv
 )
+
+pacstrap_pre_packages=(
+    virtualbox
+
+    # if arch is run inside virtualbox
+    virtualbox-guest-utils
+)
