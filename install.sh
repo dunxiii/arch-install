@@ -146,6 +146,9 @@ for dir in DESKTOP TEMPLATES MUSIC VIDEOS; do
     sed -i -re "/${dir}/s/^/#/" /etc/xdg/user-dirs.defaults
 done
 
+# Base iptables file
+cp /etc/iptables/{empty,iptables}.rules
+
 EOF
 
 }
@@ -281,6 +284,7 @@ echo -e "----------------------------------------"
 arch-chroot "${MOUNT_POINT}" /bin/bash -e <<EOF
 
 systemctl enable NetworkManager.service
+systemctl enable iptables.service
 systemctl enable acpid.service
 systemctl enable sshd.service
 systemctl enable tlp

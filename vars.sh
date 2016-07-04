@@ -31,7 +31,6 @@ pacstrap_packages=(
     compton
     cups
     feh
-    firewalld
     git
     grub
     i3-wm
