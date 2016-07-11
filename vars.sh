@@ -26,7 +26,6 @@ pacstrap_packages=(
 
     # Desktop base
     acpid
-    arandr
     btrfs-progs
     compton
     cups
@@ -35,6 +34,7 @@ pacstrap_packages=(
     grub
     i3-wm
     i3lock
+    jq
     network-manager-applet
     networkmanager
     openssh
