@@ -104,8 +104,6 @@ echo -e "----------------------------------------"
 
 pacstrap "${MOUNT_POINT}" "${pacstrap_packages[@]}"
 
-pacstrap "${MOUNT_POINT}" "${pacstrap_pre_packages[@]}"
-
 for pkg in "${pip_packages[@]}"; do
     arch-chroot "${MOUNT_POINT}" /bin/bash -c "LC_ALL=en_US.utf8 pip3 install ${pkg}"
 done
@@ -189,9 +187,7 @@ arch-chroot "${MOUNT_POINT}" /bin/bash -e <<EOF
 
 groupadd sudo
 
-useradd -m -G sudo -s \$(which zsh) "${USER}"
-
-[[ \$(which virtualbox 2>/dev/null) ]] && gpasswd -a "${USER}" vboxusers
+useradd -m -G sudo,vboxusers,docker -s \$(which zsh) "${USER}"
 
 EOF
 
@@ -211,14 +207,17 @@ xdg-user-dirs-update
 # Extra directories
 mkdir -p ~/{Bin,Git,Insync,.vim/undodir}
 
-# Get dotfiles
+# Get dotfiles and scripts
 git clone https://github.com/dunxiii/dotfiles.git ~/Git/dotfiles
+git clone https://github.com/dunxiii/desktop-scripts.git ~/Git/desktop-scripts
 
-# Deploy dotfiles
+# Deploy gitfiles
 ~/Git/dotfiles/install
+~/Git/desktop-scripts/install.sh
 
-# Swhitch dotfiles from https to ssh
+# Switch git repos from https to ssh
 cd ~/Git/dotfiles && git remote set-url origin git@github.com:dunxiii/dotfiles.git
+cd ~/Git/desktop-scripts && git remote set-url origin git@github.com:dunxiii/desktop-scripts.git
 
 # Install oh my zsh
 git clone git://github.com/robbyrussell/oh-my-zsh.git ~/Git/oh-my-zsh
@@ -244,6 +243,7 @@ sed -i -re "s/(PKGEXT=)[^=]*$/\1'.pkg.tar'/" "${MOUNT_POINT}/etc/makepkg.conf"
 
 arch-chroot "${MOUNT_POINT}" /bin/bash -e <<'EOF'
 
+# Workaround for aur package installation
 echo "Defaults visiblepw" | (EDITOR="tee -a" visudo)
 echo "%sudo   ALL=(ALL) NOPASSWD: ALL" | (EDITOR="tee -a" visudo)
 
@@ -284,8 +284,9 @@ echo -e "----------------------------------------"
 arch-chroot "${MOUNT_POINT}" /bin/bash -e <<EOF
 
 systemctl enable NetworkManager.service
-systemctl enable iptables.service
 systemctl enable acpid.service
+systemctl enable docker.service
+systemctl enable iptables.service
 systemctl enable sshd.service
 systemctl enable tlp
 
@@ -311,7 +312,7 @@ EOF
 
 echo -e "\nYour system is now ready!"
 echo -e "Password for root and ${USER} is: 123"
-echo -e "Reboot into your new system and deploy dotfiles"
+echo -e "Reboot into your new system"
 
 }
 

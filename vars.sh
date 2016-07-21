@@ -86,7 +86,6 @@ pacstrap_packages=(
 
     # virtualbox and denpendencies
     qt4
-    #linux-headers
     virtualbox
 
     # if arch is run inside virtualbox
@@ -101,6 +100,7 @@ pacstrap_packages=(
 
     # Sysadmin
     bind-tools
+    docker
     ipcalc
     nfs-utils
     nmap
@@ -139,18 +139,11 @@ pacaur_packages=(
 
 aur_packages=(
     chromium-pepper-flash
-    gitkraken
+#    gitkraken
     insync
     telegram-desktop-bin
     ttf-font-awesome
 #    hunspell-sv
-)
-
-pacstrap_pre_packages=(
-    virtualbox
-
-    # if arch is run inside virtualbox
-    virtualbox-guest-utils
 )
 # }}}
 
