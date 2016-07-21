@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# vim: set foldmethod=marker:
 
 JOBS=5
 
@@ -15,6 +16,7 @@ MOUNT_POINT=/mnt
 #DISK_LAYOUT="btrfs_lvm_luks"
 DISK_LAYOUT="btrfs_luks"
 
+# {{{ Packages
 pacstrap_packages=(
     # Drivers
     libva-intel-driver
@@ -84,7 +86,7 @@ pacstrap_packages=(
 
     # virtualbox and denpendencies
     qt4
-    linux-headers
+    #linux-headers
     virtualbox
 
     # if arch is run inside virtualbox
@@ -139,6 +141,7 @@ aur_packages=(
     chromium-pepper-flash
     gitkraken
     insync
+    telegram-desktop-bin
     ttf-font-awesome
 #    hunspell-sv
 )
@@ -149,3 +152,14 @@ pacstrap_pre_packages=(
     # if arch is run inside virtualbox
     virtualbox-guest-utils
 )
+# }}}
+
+# Make systemd remeber display brightness after suspend
+echo <<EOF > /usr/share/X11/xorg.conf.d/20-intel.conf
+Section "Device"
+    Identifier  "card0"
+    Driver      "intel"
+    Option      "Backlight"  "intel_backlight"
+    BusID       "PCI:0:2:0"
+EndSection
+EOF
