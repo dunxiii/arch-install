@@ -60,12 +60,12 @@ btrfs_luks() {
         btrfs subvolume create "${MOUNT_POINT}/@arch_snapshots"
 
         umount "${DEV_ROOT}"
-        mount "${DEV_ROOT}" "${MOUNT_POINT}" -o ssd,compress=lzo,noatime,subvol=@arch
+        mount "${DEV_ROOT}" "${MOUNT_POINT}" -o ssd,noatime,subvol=@arch
 
         mkdir -p "${MOUNT_POINT}/.snapshots"
         mkdir -p "${MOUNT_POINT}/boot/efi"
 
-        mount "${DEV_ROOT}" "${MOUNT_POINT}/.snapshots" -o ssd,compress=lzo,noatime,subvol=@arch_snapshots
+        mount "${DEV_ROOT}" "${MOUNT_POINT}/.snapshots" -o ssd,noatime,subvol=@arch_snapshots
         mount "${DEV_BOOT}" "${MOUNT_POINT}/boot/efi"
 
         mkdir -p "${MOUNT_POINT}/var/cache/pacman"
