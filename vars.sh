@@ -60,6 +60,14 @@ pacstrap_packages=(
     zsh-completions
     zsh-syntax-highlighting
 
+    # Bluetooth
+    blueman
+    bluez
+    # TODO test if firmware is needed
+    bluez-firmware
+    bluez-utils
+    pulseaudio-bluetooth
+
     # Desktop apps
     chromium
     gcolor2
