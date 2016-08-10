@@ -78,9 +78,9 @@ btrfs_luks() {
         btrfs subvolume create "${MOUNT_POINT}/var/tmp"
 
         # Crypt file to not have to give passphrase two times
-        dd bs=512 count=4 if=/dev/urandom of=/crypto_keyfile.bin
-        chmod 000 /crypto_keyfile.bin
-        cryptsetup luksAddKey "${DEV_CRYPT}" /crypto_keyfile.bin
+        dd bs=512 count=4 if=/dev/urandom of="${MOUNT_POINT}/crypto_keyfile.bin"
+        chmod 000 "${MOUNT_POINT}/crypto_keyfile.bin"
+        cryptsetup luksAddKey "${DEV_CRYPT}" "${MOUNT_POINT}/crypto_keyfile.bin"
 
     else
 
