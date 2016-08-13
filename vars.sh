@@ -1,8 +1,6 @@
 #!/usr/bin/env bash
 # vim: set foldmethod=marker:
 
-JOBS=5
-
 USER="jack"
 HOSTNAME="zentux"
 TIMEZONE="Europe/Stockholm"
@@ -37,6 +35,8 @@ pacstrap_packages=(
     i3-wm
     i3lock
     jq
+    linux-lts
+    linux-lts-headers
     network-manager-applet
     networkmanager
     openssh
@@ -154,13 +154,14 @@ aur_packages=(
 #    hunspell-sv
 )
 # }}}
-
-# Make systemd remeber display brightness after suspend
-echo <<EOF > /usr/share/X11/xorg.conf.d/20-intel.conf
-Section "Device"
-    Identifier  "card0"
-    Driver      "intel"
-    Option      "Backlight"  "intel_backlight"
-    BusID       "PCI:0:2:0"
-EndSection
-EOF
+# {{{ Services
+systemd_services=(
+    NetworkManager.service
+    acpid.service
+    bluetooth.service
+    docker.service
+    iptables.service
+    sshd.service
+    tlp.service
+)
+# }}}

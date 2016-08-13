@@ -56,7 +56,7 @@ echo -e "----------------------------------------"
 # fstab
 genfstab -U "${MOUNT_POINT}" >> "${MOUNT_POINT}/etc/fstab"
 
-arch-chroot "${MOUNT_POINT}" /bin/bash -e <<'EOF'
+arch-chroot "${MOUNT_POINT}" /bin/bash -e <<'EOB'
 
 # locale & keymap
 sed -i "/^#${LOCALE} UTF-8/s/^#//" /etc/locale.gen
@@ -75,7 +75,7 @@ sed -i "s/\(localhost$\)/\1 ${HOSTNAME}/" /etc/hosts
 
 # CPU cores for compiling from AUR
 sed -i "/^#MAKEFLAGS/s/^#//" /etc/makepkg.conf
-sed -i -re "s/(MAKEFLAGS=)[^=]*$/\1\"-j${JOBS}\"/" /etc/makepkg.conf
+sed -i -re "s/(MAKEFLAGS=)[^=]*$/\1\"-j$(( $(nproc) + 1 ))\"/" /etc/makepkg.conf
 
 # colored pacman output
 sed -i "/^#Color/s/^#//" /etc/pacman.conf
@@ -93,7 +93,7 @@ mkinitcpio -p linux
 # sudo
 echo "%sudo ALL=(ALL:ALL) ALL" | (EDITOR="tee -a" visudo)
 
-EOF
+EOB
 
 }
 
@@ -115,7 +115,7 @@ configure_extra() {
 echo -e "\nConfiguring extra"
 echo -e "----------------------------------------"
 
-arch-chroot "${MOUNT_POINT}" /bin/bash -e <<'EOF'
+arch-chroot "${MOUNT_POINT}" /bin/bash -e <<'EOB'
 
 # TLP
 sed -i -re 's/(RUNTIME_PM_DRIVER_BLACKLIST=)[^=]*$/\1"radeon mei_me nouveau"/' "/etc/default/tlp"
@@ -147,7 +147,17 @@ done
 # Base iptables file
 cp /etc/iptables/{empty,iptables}.rules
 
+# Make systemd remeber display brightness after suspend
+echo <<EOF > /usr/share/X11/xorg.conf.d/20-intel.conf
+Section "Device"
+    Identifier  "card0"
+    Driver      "intel"
+    Option      "Backlight"  "intel_backlight"
+    BusID       "PCI:0:2:0"
+EndSection
 EOF
+
+EOB
 
 }
 
@@ -156,7 +166,7 @@ install_bootloader() {
 echo -e "\nInstalling bootloader"
 echo -e "----------------------------------------"
 
-arch-chroot "${MOUNT_POINT}" /bin/bash -e <<EOF
+arch-chroot "${MOUNT_POINT}" /bin/bash -e <<EOB
 
 # Configure GRUB
 sed -i -re 's,^(GRUB_CMDLINE_LINUX=)[^=]*$,\1"cryptdevice=UUID=$(blkid -s UUID -o value "${DEV_CRYPT}"):cryptroot",' /etc/default/grub
@@ -174,7 +184,7 @@ fi
 
 grub-mkconfig -o /boot/grub/grub.cfg
 
-EOF
+EOB
 
 }
 
@@ -183,13 +193,13 @@ create_user() {
 echo -e "\nCreating user"
 echo -e "----------------------------------------"
 
-arch-chroot "${MOUNT_POINT}" /bin/bash -e <<EOF
+arch-chroot "${MOUNT_POINT}" /bin/bash -e <<EOB
 
 groupadd sudo
 
-useradd -m -G sudo,vboxusers,docker -s \$(which zsh) "${USER}"
+useradd -m -G sudo,vboxusers,docker,lp -s "${SHELL}" "${USER}"
 
-EOF
+EOB
 
 }
 
@@ -199,7 +209,7 @@ echo -e "\nConfiguring users home directory"
 echo -e "----------------------------------------"
 
 # Execute these commands as user
-arch-chroot "${MOUNT_POINT}" /bin/bash -c "su - ${USER}" <<'EOF'
+arch-chroot "${MOUNT_POINT}" /bin/bash -c "su - ${USER}" <<'EOB'
 
 # Create default directories
 xdg-user-dirs-update
@@ -226,7 +236,7 @@ ln -s ~/Git/oh-my-zsh ~/.oh-my-zsh
 # Install vim-plug
 curl -fLo ~/.config/nvim/autoload/plug.vim --create-dirs https://raw.githubusercontent.com/junegunn/vim-plug/master/plug.vim
 
-EOF
+EOB
 
 }
 
@@ -241,16 +251,16 @@ cp "${MOUNT_POINT}/etc/sudoers"{,.org}
 # Disable compression of aur packages
 sed -i -re "s/(PKGEXT=)[^=]*$/\1'.pkg.tar'/" "${MOUNT_POINT}/etc/makepkg.conf"
 
-arch-chroot "${MOUNT_POINT}" /bin/bash -e <<'EOF'
+arch-chroot "${MOUNT_POINT}" /bin/bash -e <<'EOB'
 
 # Workaround for aur package installation
 echo "Defaults visiblepw" | (EDITOR="tee -a" visudo)
 echo "%sudo   ALL=(ALL) NOPASSWD: ALL" | (EDITOR="tee -a" visudo)
 
-EOF
+EOB
 
 # AUR Helper: pacaur
-arch-chroot "${MOUNT_POINT}" /bin/bash -c "su - ${USER}" <<EOF
+arch-chroot "${MOUNT_POINT}" /bin/bash -c "su - ${USER}" <<EOB
 
     # Fix for cower
     gpg --recv-keys --keyserver hkp://pgp.mit.edu 1EB2638FF56C0C53
@@ -264,7 +274,7 @@ arch-chroot "${MOUNT_POINT}" /bin/bash -c "su - ${USER}" <<EOF
     done
 
     pacaur --noconfirm -y "${aur_packages[@]}"
-EOF
+EOB
 
 # Empty pacaur cache
 rm -rf "${MOUNT_POINT}/home/${USER}/.cache/pacaur/"
@@ -281,16 +291,11 @@ enable_services() {
 echo -e "\nEnabling services"
 echo -e "----------------------------------------"
 
-arch-chroot "${MOUNT_POINT}" /bin/bash -e <<EOF
+for pkg in "${systemd_services[@]}"; do
+    arch-chroot "${MOUNT_POINT}" /bin/bash -c "systemctl enable ${pkg}"
+done
 
-systemctl enable NetworkManager.service
-systemctl enable acpid.service
-systemctl enable docker.service
-systemctl enable iptables.service
-systemctl enable sshd.service
-systemctl enable tlp
-
-EOF
+EOB
 
 }
 
@@ -299,16 +304,23 @@ cleanup() {
 echo -e "\nCleanup files"
 echo -e "----------------------------------------"
 
-if [[ -n "$(arch-chroot "${MOUNT_POINT}" /bin/bash -c 'pacman -Qqtd')" ]]; then
-    arch-chroot "${MOUNT_POINT}" /bin/bash -c 'pacman --noconfirm -Rs $(pacman -Qqtd) 2>/dev/null'
+# Search for packages that are not longer required or dependencies
+packages_to_clean=$(
+    arch-chroot "${MOUNT_POINT}" /bin/bash -c 'pacman --query --quiet --unrequired --deps'
+)
+
+# Remove those packages
+if [[ $? -eq 0 ]]; then
+    arch-chroot "${MOUNT_POINT}" /bin/bash -c \
+        'pacman --noconfirm -Rs $( echo ${packages_to_clean} ) 2>/dev/null'
 fi
 
-arch-chroot "${MOUNT_POINT}" /bin/bash -e <<EOF
+arch-chroot "${MOUNT_POINT}" /bin/bash -e <<EOB
 
 echo "root:123" | chpasswd
 echo "${USER}:123" | chpasswd
 
-EOF
+EOB
 
 echo -e "\nYour system is now ready!"
 echo -e "Password for root and ${USER} is: 123"
@@ -317,8 +329,6 @@ echo -e "Reboot into your new system"
 }
 
 main() {
-
-    echo -e "\n"
 
     # Installation steps
     #-------------------
@@ -339,6 +349,7 @@ main() {
 
 }
 
+clear
 main
 echo -e "\nTotal time:"
 echo -e "----------------------------------------"
