@@ -1,5 +1,44 @@
 #!/usr/bin/env bash
 
+lvm_luks() {
+
+    echo -e "\nPreparing devices"
+    echo -e "----------------------------------------"
+
+    # Vars
+    DEV_BOOT=/dev/sda1
+    DEV_CRYPT=/dev/sda2
+    DEV_ROOT=/dev/mapper/vg-arch
+    DEV_SWAP=/dev/mapper/vg-swap
+
+    if [[ "${VM}" = true ]]; then
+        echo test | cryptsetup open --type luks ${DEV_CRYPT} lvm -d -
+    fi
+
+    # Make filesystems
+    mkfs.fat -F32 "${DEV_BOOT}"
+    mkfs.ext4 "${DEV_ROOT}"
+
+    # Mount root
+    mount "${DEV_ROOT}" "${MOUNT_POINT}"
+
+    # Make directory for ESP
+    mkdir -p "${MOUNT_POINT}/boot/efi"
+
+    # Mount ESP
+    mount "${DEV_BOOT}" "${MOUNT_POINT}/boot/efi"
+
+    # Crypt file to not have to give passphrase two times
+    dd bs=512 count=4 if=/dev/urandom of="${MOUNT_POINT}/crypto_keyfile.bin"
+    chmod 000 "${MOUNT_POINT}/crypto_keyfile.bin"
+    cryptsetup luksAddKey "${DEV_CRYPT}" "${MOUNT_POINT}/crypto_keyfile.bin"
+
+    # Enable swap
+    mkswap "${DEV_SWAP}"
+    swapon "${DEV_SWAP}"
+
+}
+
 btrfs_lvm_luks() {
 
     echo -e "\nPreparing devices"

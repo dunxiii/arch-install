@@ -3,7 +3,7 @@ set -e
 
 SECONDS=0
 
-source ./vars.sh
+source ./hosts/zenbook.sh
 source ./disk-layouts.sh
 
 export HOSTNAME
@@ -39,12 +39,12 @@ pacman -Syy
 
 }
 
-install_base() {
+install_packages() {
 
-echo -e "\nInstalling base packages"
+echo -e "\nInstalling packages"
 echo -e "----------------------------------------"
 
-pacstrap "${MOUNT_POINT}" base base-devel btrfs-progs
+pacstrap "${MOUNT_POINT}" base base-devel "${pacstrap_packages[@]}"
 
 }
 
@@ -53,7 +53,6 @@ configure_base() {
 echo -e "\nConfiguring base"
 echo -e "----------------------------------------"
 
-# fstab
 genfstab -U "${MOUNT_POINT}" >> "${MOUNT_POINT}/etc/fstab"
 
 arch-chroot "${MOUNT_POINT}" /bin/bash -e <<'EOB'
@@ -82,82 +81,28 @@ sed -i "/^#Color/s/^#//" /etc/pacman.conf
 
 # initramfs
 sed -i "/^HOOKS=/s/block/block encrypt lvm2/g" /etc/mkinitcpio.conf
-
-# BTRFS fix
-sed -i "/^HOOKS=/s/fsck/btrfs/g" /etc/mkinitcpio.conf
-sed -i -re "s/(BINARIES=)[^=]*$/\1\"\/usr\/bin\/btrfsck\"/" /etc/mkinitcpio.conf
+sed -i -re "s/(FILES=)[^=]*$/\1\"\/crypto_keyfile.bin\"/" /etc/mkinitcpio.conf
 
 # initramfs
-mkinitcpio -p linux
+mkinitcpio -P
 
 # sudo
 echo "%sudo ALL=(ALL:ALL) ALL" | (EDITOR="tee -a" visudo)
 
+ln -s /run/media/ /media
+
 EOB
 
 }
 
-install_extra() {
+install_python() {
 
-echo -e "\nInstalling extra packages"
+echo -e "\nInstalling python packages"
 echo -e "----------------------------------------"
-
-pacstrap "${MOUNT_POINT}" "${pacstrap_packages[@]}"
 
 for pkg in "${pip_packages[@]}"; do
     arch-chroot "${MOUNT_POINT}" /bin/bash -c "LC_ALL=en_US.utf8 pip3 install ${pkg}"
 done
-
-}
-
-configure_extra() {
-
-echo -e "\nConfiguring extra"
-echo -e "----------------------------------------"
-
-arch-chroot "${MOUNT_POINT}" /bin/bash -e <<'EOB'
-
-# TLP
-sed -i -re 's/(RUNTIME_PM_DRIVER_BLACKLIST=)[^=]*$/\1"radeon mei_me nouveau"/' "/etc/default/tlp"
-
-# acpi
-declare -A ACPI_HANDLER_VALUE=(
-    ["Default acpi"]='user=$(ps -o user --no-headers $(pgrep startx))'
-    ["LID closed"]='DISPLAY=:0 su $user -c \"i3-exit.sh -l\"'
-    ["i3-exit.sh"]='systemctl suspend'
-    ["LID opened"]='DISPLAY=:0 su $user -c \"xset dpms force on\"'
-)
-
-for line in "${!ACPI_HANDLER_VALUE[@]}"; do
-    gawk -i inplace '{print} /'"${line}"'/{ print substr($0,1,match($0,/[^[:space:]]/)-1) "'"${ACPI_HANDLER_VALUE[${line}]}"'" }' "/etc/acpi/handler.sh"
-done
-
-# logind
-sed -i '/^#HandlePowerKey/s/^#//' /etc/systemd/logind.conf
-sed -i '/^#HandleLidSwitch=/s/^#//' /etc/systemd/logind.conf
-
-sed -i -re 's/(HandlePowerKey=)[^=]*$/\1ignore/' /etc/systemd/logind.conf
-sed -i -re 's/(HandleLidSwitch=)[^=]*$/\1ignore/' /etc/systemd/logind.conf
-
-# users-dirs
-for dir in DESKTOP TEMPLATES MUSIC VIDEOS; do
-    sed -i -re "/${dir}/s/^/#/" /etc/xdg/user-dirs.defaults
-done
-
-# Base iptables file
-cp /etc/iptables/{empty,iptables}.rules
-
-# Make systemd remeber display brightness after suspend
-echo <<EOF > /usr/share/X11/xorg.conf.d/20-intel.conf
-Section "Device"
-    Identifier  "card0"
-    Driver      "intel"
-    Option      "Backlight"  "intel_backlight"
-    BusID       "PCI:0:2:0"
-EndSection
-EOF
-
-EOB
 
 }
 
@@ -197,7 +142,7 @@ arch-chroot "${MOUNT_POINT}" /bin/bash -e <<EOB
 
 groupadd sudo
 
-useradd -m -G sudo,vboxusers,docker,lp -s "${SHELL}" "${USER}"
+useradd -m -G "${USER_GROUPS}" -s "${SHELL}" "${USER}"
 
 EOB
 
@@ -221,9 +166,8 @@ mkdir -p ~/{Bin,Git,Insync,.vim/undodir}
 git clone https://github.com/dunxiii/dotfiles.git ~/Git/dotfiles
 git clone https://github.com/dunxiii/desktop-scripts.git ~/Git/desktop-scripts
 
-# Deploy gitfiles
+# Deploy dotfiles
 ~/Git/dotfiles/install
-~/Git/desktop-scripts/install.sh
 
 # Switch git repos from https to ssh
 cd ~/Git/dotfiles && git remote set-url origin git@github.com:dunxiii/dotfiles.git
@@ -235,6 +179,13 @@ ln -s ~/Git/oh-my-zsh ~/.oh-my-zsh
 
 # Install vim-plug
 curl -fLo ~/.config/nvim/autoload/plug.vim --create-dirs https://raw.githubusercontent.com/junegunn/vim-plug/master/plug.vim
+
+EOB
+
+arch-chroot "${MOUNT_POINT}" /bin/bash -e <<EOB
+
+cd /home/${USER}/Git/desktop-scripts/
+./install.sh
 
 EOB
 
@@ -295,8 +246,6 @@ for pkg in "${systemd_services[@]}"; do
     arch-chroot "${MOUNT_POINT}" /bin/bash -c "systemctl enable ${pkg}"
 done
 
-EOB
-
 }
 
 cleanup() {
@@ -306,11 +255,11 @@ echo -e "----------------------------------------"
 
 # Search for packages that are not longer required or dependencies
 packages_to_clean=$(
-    arch-chroot "${MOUNT_POINT}" /bin/bash -c 'pacman --query --quiet --unrequired --deps'
+    arch-chroot "${MOUNT_POINT}" /bin/bash -c 'pacman --query --quiet --unrequired --deps || true'
 )
 
 # Remove those packages
-if [[ $? -eq 0 ]]; then
+if [[ -n "${packages_to_clean}" ]]; then
     arch-chroot "${MOUNT_POINT}" /bin/bash -c \
         'pacman --noconfirm -Rs $( echo ${packages_to_clean} ) 2>/dev/null'
 fi
@@ -335,10 +284,9 @@ main() {
     unmount_devices
     "${DISK_LAYOUT}"
     update_mirrors
-    install_base
-    "${DISK_LAYOUT}" "POST"
+    install_packages
     configure_base
-    install_extra
+    install_python
     configure_extra
     install_bootloader
     create_user
