@@ -1,10 +1,15 @@
 #!/usr/bin/env bash
 set -e
 
+# TODO Ask user for cryptphrase
+# TODO Ask user for pw, for user and root
+# TODO If partitions exist, what do we do?
+# TODO Dualboot flow
+
 SECONDS=0
 
-source ./hosts/zenbook.sh
-source ./disk-layouts.sh
+source ./hosts/base.sh
+source ./hosts/zenbook/conf.sh
 
 export HOSTNAME
 export USER
@@ -14,13 +19,64 @@ export LOCALE
 export SHELL
 export LC_ALL
 
-unmount_devices() {
+prepare_disk() {
 
-echo -e "\nUnmounting devices:"
+echo -e "\nPreparing devices"
 echo -e "----------------------------------------"
 
-umount --verbose --lazy "${MOUNT_POINT}" || true
-swapoff --all
+# Make disk GPT
+parted --script ${DEV} mklabel gpt
+
+# Partition for ESP
+parted --script ${DEV} mkpart ESP fat32 1MiB 513MiB
+parted --script ${DEV} set 1 boot on
+mkfs.fat -F32 "${DEV_BOOT}"
+
+# Partition for data
+parted --script ${DEV} mkpart primary 513MiB 100%
+parted --script ${DEV} set 2 lvm on
+
+# Encrypt data partition
+echo -n "test" | cryptsetup -y luksFormat ${DEV_CRYPT} -
+
+# Open encrypted disk
+echo -n "test" | cryptsetup open --type luks ${DEV_CRYPT} lvm -d -
+
+# Create Volume Group on disk
+vgcreate vg /dev/mapper/lvm
+
+# Create Logical Vomlumes
+for i in "${!volumes[@]}"; do
+
+    if [[ "${i}" == swap ]]; then
+    	lvcreate -L "${volumes[$i]}" vg -n "${i}"
+    else
+    	lvcreate -L "${volumes[$i]}" vg -n "${i}"
+
+        # Make filesystems
+        mkfs.ext4 "/dev/vg/${i}"
+
+    fi
+
+done
+
+# Mount root
+mount "${DEV_ROOT}" "${MOUNT_POINT}"
+
+# Make directory for ESP
+mkdir -p "${MOUNT_POINT}/boot/efi"
+
+# Mount ESP
+mount "${DEV_BOOT}" "${MOUNT_POINT}/boot/efi"
+
+# Crypt file to not have to give passphrase two times
+dd bs=512 count=4 if=/dev/urandom of="${MOUNT_POINT}/crypto_keyfile.bin"
+chmod 000 "${MOUNT_POINT}/crypto_keyfile.bin"
+echo -n "test" | cryptsetup luksAddKey "${DEV_CRYPT}" "${MOUNT_POINT}/crypto_keyfile.bin" -d -
+
+# Enable swap
+mkswap "${DEV_SWAP}"
+swapon "${DEV_SWAP}"
 
 }
 
@@ -57,41 +113,45 @@ genfstab -U "${MOUNT_POINT}" >> "${MOUNT_POINT}/etc/fstab"
 
 arch-chroot "${MOUNT_POINT}" /bin/bash -e <<'EOB'
 
-# locale & keymap
-sed -i "/^#${LOCALE} UTF-8/s/^#//" /etc/locale.gen
-echo "LANG=${LOCALE}" > /etc/locale.conf
-echo "KEYMAP=${KEYMAP}" > /etc/vconsole.conf
-locale-gen
+    # locale & keymap
+    echo "en_US.UTF-8 UTF-8"    >> /etc/locale.gen
+    echo "LANG=${LOCALE}"       >  /etc/locale.conf
+    echo "KEYMAP=${KEYMAP}"     >  /etc/vconsole.conf
+    locale-gen
 
-# time
-ln -s /usr/share/zoneinfo/${TIMEZONE} /etc/localtime
-hwclock --systohc --utc
+    # time
+    ln -s /usr/share/zoneinfo/${TIMEZONE} /etc/localtime
+    ntpd -qg
+    hwclock --systohc --utc
 
-# hostname
-hostname "${HOSTNAME}"
-echo "${HOSTNAME}" > /etc/hostname
-sed -i "s/\(localhost$\)/\1 ${HOSTNAME}/" /etc/hosts
+    # hostname
+    hostname "${HOSTNAME}"
+    echo "${HOSTNAME}" > /etc/hostname
+    sed -i "s/\(localhost$\)/\1 ${HOSTNAME}/" /etc/hosts
 
-# CPU cores for compiling from AUR
-sed -i "/^#MAKEFLAGS/s/^#//" /etc/makepkg.conf
-sed -i -re "s/(MAKEFLAGS=)[^=]*$/\1\"-j$(( $(nproc) + 1 ))\"/" /etc/makepkg.conf
+    # CPU cores for compiling from AUR
+    sed -i -re "/^#MAKEFLAGS/a MAKEFLAGS=\"-j$(( $(nproc) + 1 ))\"" /etc/makepkg.conf
 
-# colored pacman output
-sed -i "/^#Color/s/^#//" /etc/pacman.conf
+    # colored pacman output
+    sed -i "/^#Color/a Color" /etc/pacman.conf
 
-# initramfs
-sed -i "/^HOOKS=/s/block/block encrypt lvm2/g" /etc/mkinitcpio.conf
-sed -i -re "s/(FILES=)[^=]*$/\1\"\/crypto_keyfile.bin\"/" /etc/mkinitcpio.conf
+    # initramfs
+    sed -i -re "/^HOOKS=/s/block/block encrypt lvm2/g"          /etc/mkinitcpio.conf
+    sed -i -re "s/(FILES=)[^=]*$/\1\"\/crypto_keyfile.bin\"/"   /etc/mkinitcpio.conf
 
-# initramfs
-mkinitcpio -P
+    # disable coredump
+    sed -i -re "/^#Storage/a Storage=none" /etc/systemd/coredump.conf
 
-# sudo
-echo "%sudo ALL=(ALL:ALL) ALL" | (EDITOR="tee -a" visudo)
+    # initramfs
+    mkinitcpio -P
 
-ln -s /run/media/ /media
+    # Allow users in wheel to run sudo, without password
+    echo "%wheel ALL=(ALL) NOPASSWD: ALL" | (EDITOR="tee -a" visudo)
 
 EOB
+
+cp templates/make-snapshots.target "${MOUNT_POINT}/etc/systemd/system/"
+cp templates/mk-lvm-snapshots.service "${MOUNT_POINT}/etc/systemd/system/"
 
 }
 
@@ -111,38 +171,35 @@ install_bootloader() {
 echo -e "\nInstalling bootloader"
 echo -e "----------------------------------------"
 
+UUID=$(blkid -s UUID -o value "${DEV_CRYPT}")
+
+cp templates/grub "${MOUNT_POINT}/etc/default/grub"
+cp templates/custom.cfg "${MOUNT_POINT}/boot/grub/"
+
+sed -i -e "s,\[DEV_CRYPT\],${UUID}," "${MOUNT_POINT}/etc/default/grub"
+sed -i -e "s,\[DEV_CRYPT\],${UUID}," "${MOUNT_POINT}/boot/grub/custom.cfg"
+
 arch-chroot "${MOUNT_POINT}" /bin/bash -e <<EOB
 
-# Configure GRUB
-sed -i -re 's,^(GRUB_CMDLINE_LINUX=)[^=]*$,\1"cryptdevice=UUID=$(blkid -s UUID -o value "${DEV_CRYPT}"):cryptroot",' /etc/default/grub
-sed -i -re 's/(GRUB_CMDLINE_LINUX_DEFAULT=)[^=]*$/\1"quiet loglevel=3 acpi_osi="/' /etc/default/grub
-sed -i -re 's/(GRUB_TIMEOUT=)[^=]*$/\10/' /etc/default/grub
-sed -i '/^#GRUB_HIDDEN_TIMEOUT=/s/^#//' /etc/default/grub
-sed -i -re 's/(GRUB_HIDDEN_TIMEOUT=)[^=]*$/\13/' /etc/default/grub
-echo "GRUB_ENABLE_CRYPTODISK=y" >> /etc/default/grub
-
-if [[ "${UEFI}" = false ]]; then
-    grub-install /dev/sda
-else
     grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=grub
-fi
 
-grub-mkconfig -o /boot/grub/grub.cfg
+    grub-mkconfig -o /boot/grub/grub.cfg
 
 EOB
 
 }
 
-create_user() {
+create_creation() {
 
 echo -e "\nCreating user"
 echo -e "----------------------------------------"
 
 arch-chroot "${MOUNT_POINT}" /bin/bash -e <<EOB
 
-groupadd sudo
+    useradd -m -G "${USER_GROUPS}" -s "${SHELL}" "${USER}"
 
-useradd -m -G "${USER_GROUPS}" -s "${SHELL}" "${USER}"
+    echo "root:123" | chpasswd
+    echo "${USER}:123" | chpasswd
 
 EOB
 
@@ -156,36 +213,20 @@ echo -e "----------------------------------------"
 # Execute these commands as user
 arch-chroot "${MOUNT_POINT}" /bin/bash -c "su - ${USER}" <<'EOB'
 
-# Create default directories
-xdg-user-dirs-update
+    # Get scripts
+    git clone https://github.com/dunxiii/desktop-scripts.git ~/Git/desktop-scripts
 
-# Extra directories
-mkdir -p ~/{Bin,Git,Insync,.vim/undodir}
+    # Switch git repo from https to ssh
+    cd ~/Git/desktop-scripts && git remote set-url origin git@github.com:dunxiii/desktop-scripts.git
 
-# Get dotfiles and scripts
-git clone https://github.com/dunxiii/dotfiles.git ~/Git/dotfiles
-git clone https://github.com/dunxiii/desktop-scripts.git ~/Git/desktop-scripts
-
-# Deploy dotfiles
-~/Git/dotfiles/install
-
-# Switch git repos from https to ssh
-cd ~/Git/dotfiles && git remote set-url origin git@github.com:dunxiii/dotfiles.git
-cd ~/Git/desktop-scripts && git remote set-url origin git@github.com:dunxiii/desktop-scripts.git
-
-# Install oh my zsh
-git clone git://github.com/robbyrussell/oh-my-zsh.git ~/Git/oh-my-zsh
-ln -s ~/Git/oh-my-zsh ~/.oh-my-zsh
-
-# Install vim-plug
-curl -fLo ~/.config/nvim/autoload/plug.vim --create-dirs https://raw.githubusercontent.com/junegunn/vim-plug/master/plug.vim
+    # Setup user
+    ~/Git/desktop-scripts/setup-user.sh
 
 EOB
 
 arch-chroot "${MOUNT_POINT}" /bin/bash -e <<EOB
 
-cd /home/${USER}/Git/desktop-scripts/
-./install.sh
+    /home/${USER}/Git/desktop-scripts/install.sh
 
 EOB
 
@@ -196,35 +237,23 @@ install_aur_packages() {
 echo -e "\nInstalling AUR packages"
 echo -e "----------------------------------------"
 
-# Temporary sudoers
-cp "${MOUNT_POINT}/etc/sudoers"{,.org}
-
 # Disable compression of aur packages
 sed -i -re "s/(PKGEXT=)[^=]*$/\1'.pkg.tar'/" "${MOUNT_POINT}/etc/makepkg.conf"
-
-arch-chroot "${MOUNT_POINT}" /bin/bash -e <<'EOB'
-
-# Workaround for aur package installation
-echo "Defaults visiblepw" | (EDITOR="tee -a" visudo)
-echo "%sudo   ALL=(ALL) NOPASSWD: ALL" | (EDITOR="tee -a" visudo)
-
-EOB
 
 # AUR Helper: pacaur
 arch-chroot "${MOUNT_POINT}" /bin/bash -c "su - ${USER}" <<EOB
 
-    # Fix for cower
-    gpg --recv-keys --keyserver hkp://pgp.mit.edu 1EB2638FF56C0C53
+    cd Downloads
 
-    source /etc/profile.d/perlbin.sh
-
-    for pkg in ${pacaur_packages[@]}; do
-        git clone "https://aur.archlinux.org/\${pkg}.git"
-        cd "\${pkg}" && makepkg --noconfirm -sric
-        cd .. && rm -rf "\${pkg}"
+    for pkg in cower pacaur; do
+    	curl -o PKGBUILD "https://aur.archlinux.org/cgit/aur.git/plain/PKGBUILD?h=\${pkg}"
+    	makepkg PKGBUILD --skippgpcheck > /dev/null
+    	sudo pacman -U \${pkg}*.pkg.tar --noconfirm
     done
 
-    pacaur --noconfirm -y "${aur_packages[@]}"
+    cd .. && rm -rf Downloads/*
+
+    pacaur --noconfirm -y "${aur_packages[@]}" > /dev/null
 EOB
 
 # Empty pacaur cache
@@ -232,8 +261,6 @@ rm -rf "${MOUNT_POINT}/home/${USER}/.cache/pacaur/"
 
 # Enable compression of aur packages
 sed -i -re "s/(PKGEXT=)[^=]*$/\1'.pkg.tar.xz'/" "${MOUNT_POINT}/etc/makepkg.conf"
-
-mv "${MOUNT_POINT}/etc/sudoers"{.org,}
 
 }
 
@@ -246,32 +273,16 @@ for pkg in "${systemd_services[@]}"; do
     arch-chroot "${MOUNT_POINT}" /bin/bash -c "systemctl enable ${pkg}"
 done
 
+# And we are done
+
+umount -l "${MOUNT_POINT}"
+
 }
 
-cleanup() {
-
-echo -e "\nCleanup files"
-echo -e "----------------------------------------"
-
-# Search for packages that are not longer required or dependencies
-packages_to_clean=$(
-    arch-chroot "${MOUNT_POINT}" /bin/bash -c 'pacman --query --quiet --unrequired --deps || true'
-)
-
-# Remove those packages
-if [[ -n "${packages_to_clean}" ]]; then
-    arch-chroot "${MOUNT_POINT}" /bin/bash -c \
-        'pacman --noconfirm -Rs $( echo ${packages_to_clean} ) 2>/dev/null'
-fi
-
-arch-chroot "${MOUNT_POINT}" /bin/bash -e <<EOB
-
-echo "root:123" | chpasswd
-echo "${USER}:123" | chpasswd
-
-EOB
+finish() {
 
 echo -e "\nYour system is now ready!"
+echo -e "----------------------------------------"
 echo -e "Password for root and ${USER} is: 123"
 echo -e "Reboot into your new system"
 
@@ -279,25 +290,21 @@ echo -e "Reboot into your new system"
 
 main() {
 
-    # Installation steps
-    #-------------------
-    unmount_devices
-    "${DISK_LAYOUT}"
+    prepare_disk
     update_mirrors
     install_packages
     configure_base
     install_python
-    configure_extra
+    configure_extra # Found in host file
     install_bootloader
-    create_user
+    create_creation
     configure_user_home
     install_aur_packages
     enable_services
-    cleanup
+    finish
 
 }
 
-clear
 main
 echo -e "\nTotal time:"
 echo -e "----------------------------------------"
