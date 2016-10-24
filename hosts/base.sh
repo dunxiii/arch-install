@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 # vim: set foldmethod=marker:
 
+ESP=/boot/EFI
+LC_ALL="C"
+MOUNT_POINT=/mnt
+
 # {{{ Packages
 pacstrap_packages+=(
     # Drivers

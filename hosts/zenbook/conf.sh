@@ -1,14 +1,7 @@
 #!/usr/bin/env bash
 # vim: set foldmethod=marker:
 
-# Don't change these
-ESP=/boot/EFI
-LC_ALL="C"
-MOUNT_POINT=/mnt
-
-# Change these
 USER="jack"
-#USER_GROUPS="wheel,vboxusers,docker,lp"
 USER_GROUPS="wheel,lp"
 HOSTNAME="zentux"
 TIMEZONE="Europe/Stockholm"
@@ -23,7 +16,6 @@ DEV_SWAP=/dev/vg/swap
 
 declare -A volumes
 volumes[swap]=1G
-volumes[backup]=256M
 volumes[arch]=5G
 
 # {{{ Packages
