@@ -57,14 +57,8 @@ pacstrap_packages+=(
     # i3pystatus deps
     wireless_tools
 
-    # virtualbox and denpendencies
-    #qt4
-    #virtualbox
-
     # Sysadmin
     #remmina freerdp intltool
-    #vagrant
-    #docker
 )
 
 pip_packages+=(
@@ -88,10 +82,43 @@ aur_packages+=(
 # {{{ Services
 systemd_services+=(
     #bluetooth.service
-    #docker.service
     tlp.service
 )
 # }}}
+
+docker_host() {
+    pacstrap_packages+=(
+        docker
+    )
+    systemd_services+=(
+        docker.service
+    )
+}
+virtualbox_host() {
+    pacstrap_packages+=(
+        qt4
+        vagrant
+        virtualbox
+    )
+}
+kvm_host() {
+    pacstrap_packages+=(
+        bridge-utils
+        dnsmasq
+        ebtables
+        openbsd-netcat
+        qemu-headless
+        virt-manager
+    )
+    systemd_services+=(
+        libvirtd.service
+    )
+}
+
+#docker_host
+#virtualbox_host
+kvm_host
+
 # {{{ Config functions
 configure_extra() {
 

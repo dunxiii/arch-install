@@ -93,7 +93,6 @@ systemd_services+=(
 
 virtualbox_guest() {
 pacstrap_packages+=(
-    # Virtualbox guest
     virtualbox-guest-modules-arch
     virtualbox-guest-utils
 )
