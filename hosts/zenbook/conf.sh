@@ -93,6 +93,7 @@ docker_host() {
     systemd_services+=(
         docker.service
     )
+    USER_GROUPS="${USER_GROUPS},docker"
 }
 virtualbox_host() {
     pacstrap_packages+=(
@@ -113,6 +114,7 @@ kvm_host() {
     systemd_services+=(
         libvirtd.service
     )
+    USER_GROUPS="${USER_GROUPS},kvm,libvirt"
 }
 
 #docker_host
