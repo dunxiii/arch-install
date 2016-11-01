@@ -51,6 +51,19 @@ aur_packages+=(
     ttf-font-awesome
 )
 
+virtualbox_guest() {
+pacstrap_packages+=(
+    virtualbox-guest-modules-arch
+    virtualbox-guest-utils
+)
+
+systemd_services+=(
+    vboxservice.service
+)
+}
+
+virtualbox_guest
+
 configure_extra() {
 
 echo -e "\nConfiguring extra"

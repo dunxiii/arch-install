@@ -90,16 +90,3 @@ systemd_services+=(
     sshd.service
 )
 # }}}
-
-virtualbox_guest() {
-pacstrap_packages+=(
-    virtualbox-guest-modules-arch
-    virtualbox-guest-utils
-)
-
-systemd_services+=(
-    vboxservice.service
-)
-}
-
-virtualbox_guest
