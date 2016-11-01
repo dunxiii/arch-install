@@ -16,7 +16,7 @@ DEV_SWAP=/dev/vg/swap
 
 declare -A volumes
 volumes[swap]=1G
-volumes[arch]=3G
+volumes[root]=3G
 
 pacstrap_packages+=(
     # Drivers

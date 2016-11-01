@@ -15,8 +15,9 @@ DEV_ROOT=/dev/vg/arch
 DEV_SWAP=/dev/vg/swap
 
 declare -A volumes
-volumes[swap]=1G
-volumes[arch]=5G
+volumes[swap]=8G
+volumes[root]=20G
+volumes[home]=380G
 
 # {{{ Packages
 pacstrap_packages+=(
