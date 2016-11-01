@@ -39,27 +39,26 @@ pacstrap_packages+=(
     #pulseaudio-bluetooth
 
     # Desktop apps
-    #chromium
+    chromium
     gcolor2
-    #gnome-calculator
-    #gnome-disk-utility
-    #gthumb
-    #libreoffice-still
-    #smplayer
+    gnome-calculator
+    gnome-disk-utility
+    gthumb
+    libreoffice-still
+    smplayer
     terminator
-    #transmission-gtk
-    #virtviewer
-    #zathura-pdf-mupdf
+    transmission-gtk
+    virtviewer
+    zathura-pdf-mupdf
 
     # Fonts
-    ttf-dejavu
     ttf-ubuntu-font-family
 
     # i3pystatus deps
     wireless_tools
 
     # Sysadmin
-    #remmina freerdp intltool
+    remmina freerdp intltool
 )
 
 pip_packages+=(
@@ -97,10 +96,12 @@ docker_host() {
     USER_GROUPS="${USER_GROUPS},docker"
 }
 virtualbox_host() {
+    virtualbox_host=true
     pacstrap_packages+=(
         qt4
         vagrant
-        virtualbox
+        #virtualbox # Newer virtualbox is broken with i3,
+        # workaround in configure_extra below
     )
 }
 kvm_host() {
@@ -118,8 +119,8 @@ kvm_host() {
     USER_GROUPS="${USER_GROUPS},kvm,libvirt"
 }
 
-#docker_host
-#virtualbox_host
+docker_host
+virtualbox_host
 kvm_host
 
 # {{{ Config functions
@@ -150,6 +151,15 @@ cp hosts/zenbook/templates/70-synaptics.conf "${MOUNT_POINT}/usr/share/X11/xorg.
 # Touchpad auto disable
 cp hosts/zenbook/templates/01-touchpad.rules "${MOUNT_POINT}/etc/udev/rules.d/"
 sed -i -e "s/\[USER\]/${USER}/" "${MOUNT_POINT}/etc/udev/rules.d/01-touchpad.rules"
+
+if [[ "${virtualbox_host}" == true ]]; then
+    wget http://download.virtualbox.org/virtualbox/5.0.28/VirtualBox-5.0.28-111378-Linux_amd64.run
+    chmod +x VirtualBox-5.0.28-111378-Linux_amd64.run
+    ./VirtualBox-5.0.28-111378-Linux_amd64.run
+    rm VirtualBox-5.0.28-111378-Linux_amd64.run
+    wget http://download.virtualbox.org/virtualbox/5.0.28/Oracle_VM_VirtualBox_Extension_Pack-5.0.28-111378.vbox-extpack
+    VBoxManage extpack install Oracle_VM_VirtualBox_Extension_Pack-5.0.28-111378.vbox-extpack
+fi
 
 }
 # }}}
