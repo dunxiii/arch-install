@@ -130,8 +130,7 @@ echo -e "\nConfiguring extra"
 echo -e "----------------------------------------"
 
 # acpid
-mv "${MOUNT_POINT}/etc/acpi/handler.sh" "${MOUNT_POINT}/etc/acpi/handler.sh.org"
-cp hosts/zenbook/templates/handler.sh "${MOUNT_POINT}/etc/acpi/"
+\cp -fb hosts/zenbook/templates/handler.sh "${MOUNT_POINT}/etc/acpi/"
 
 # TLP
 sed -i.org -e "s/radeon nouveau/radeon mei_me nouveau/" "${MOUNT_POINT}/etc/default/tlp"
@@ -143,7 +142,7 @@ echo -e "HandlePowerKey=ignore\nHandleLidSwitch=ignore" >> "${MOUNT_POINT}/etc/s
 cp hosts/zenbook/templates/iptables.rules "${MOUNT_POINT}/etc/iptables/"
 
 # Make systemd remeber display brightness after suspend
-#cp  hosts/zenbook/templates/20-intel.conf "${MOUNT_POINT}/usr/share/X11/xorg.conf.d/"
+cp hosts/zenbook/templates/20-intel.conf "${MOUNT_POINT}/usr/share/X11/xorg.conf.d/"
 
 # Touchpad config
 cp hosts/zenbook/templates/70-synaptics.conf "${MOUNT_POINT}/usr/share/X11/xorg.conf.d/"
