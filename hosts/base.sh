@@ -83,6 +83,7 @@ aur_packages+=(
 # }}}
 # {{{ Services
 systemd_services+=(
+    # TODO move to host conf?
     acpid.service
     NetworkManager.service
     ntpd.service
