@@ -70,8 +70,7 @@ echo -e "\nConfiguring extra"
 echo -e "----------------------------------------"
 
 # acpid
-mv "${MOUNT_POINT}/etc/acpi/handler.sh" "${MOUNT_POINT}/etc/acpi/handler.sh.org"
-cp hosts/zenbook/templates/handler.sh "${MOUNT_POINT}/etc/acpi/"
+\cp -fb hosts/zenbook/templates/handler.sh "${MOUNT_POINT}/etc/acpi/"
 
 # logind
 echo -e "HandlePowerKey=ignore\nHandleLidSwitch=ignore" >> "${MOUNT_POINT}/etc/systemd/logind.conf"
