@@ -3,7 +3,7 @@
 
 USER="jack"
 USER_GROUPS="wheel,lp"
-HOSTNAME="zentux"
+HOSTNAME="zentux-test"
 TIMEZONE="Europe/Stockholm"
 KEYMAP="sv-latin1"
 LOCALE="en_US.UTF-8"
@@ -11,7 +11,7 @@ SHELL=/usr/bin/zsh
 DEV=/dev/sda
 DEV_BOOT=${DEV}1
 DEV_CRYPT=${DEV}2
-DEV_ROOT=/dev/vg/arch
+DEV_ROOT=/dev/vg/root
 DEV_SWAP=/dev/vg/swap
 
 declare -A volumes
