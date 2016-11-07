@@ -1,3 +1,0 @@
-[Unit]
-Description=Make Snapshots
-Requires=multi-user.target
