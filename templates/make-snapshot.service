@@ -1,0 +1,14 @@
+[Unit]
+Description=make LVM snapshot
+Requires=local-fs-pre.target
+DefaultDependencies=no
+Conflicts=shutdown.target
+After=local-fs-pre.target
+Before=local-fs.target
+
+[Install]
+WantedBy=make-snapshots.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/sbin/lvcreate -L 20G -n snap -s /dev/vg/root
