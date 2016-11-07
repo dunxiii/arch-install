@@ -150,8 +150,8 @@ arch-chroot "${MOUNT_POINT}" /bin/bash -e <<'EOB'
 
 EOB
 
-cp templates/make-snapshots.target "${MOUNT_POINT}/etc/systemd/system/"
-cp templates/mk-lvm-snapshots.service "${MOUNT_POINT}/etc/systemd/system/"
+cp templates/*.target "${MOUNT_POINT}/etc/systemd/system/"
+cp templates/*.service "${MOUNT_POINT}/etc/systemd/system/"
 
 }
 
