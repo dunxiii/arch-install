@@ -9,7 +9,8 @@ set -e
 SECONDS=0
 
 source ./hosts/base.sh
-source ./hosts/zenbook/conf.sh
+#source ./hosts/test/conf.sh
+#source ./hosts/zentux/conf.sh
 
 export HOSTNAME
 export USER

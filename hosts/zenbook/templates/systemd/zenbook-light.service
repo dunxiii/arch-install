@@ -1,0 +1,11 @@
+[Unit]
+Description=Set correct permission for keyboardlight on asus zenbook
+DefaultDependencies=yes
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/zenbook-light.sh -spkp
+TimeoutSec=30
+
+[Install]
+WantedBy=multi-user.target

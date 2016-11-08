@@ -151,6 +151,21 @@ cp hosts/zenbook/templates/70-synaptics.conf "${MOUNT_POINT}/usr/share/X11/xorg.
 cp hosts/zenbook/templates/01-touchpad.rules "${MOUNT_POINT}/etc/udev/rules.d/"
 sed -i -e "s/\[USER\]/${USER}/" "${MOUNT_POINT}/etc/udev/rules.d/01-touchpad.rules"
 
+# Systemd files
+cp hosts/zenbook/templates/systemd/* "${MOUNT_POINT}/etc/systemd/system/"
+
+# Enable said services later
+for service in hosts/zenbook/templates/systemd/*.service; do
+    systemd_services+=(
+        "${service}"
+    )
+done
+
+# Pacman hooks
+mkdir -p "${MOUNT_POINT}/etc/pacman.d/hooks"
+cp hosts/zenbook/templates/hooks/* "${MOUNT_POINT}/etc/pacman.d/hooks/"
+
+# TODO run in chroot
 if [[ "${virtualbox_host}" == true ]]; then
     wget http://download.virtualbox.org/virtualbox/5.0.28/VirtualBox-5.0.28-111378-Linux_amd64.run
     chmod +x VirtualBox-5.0.28-111378-Linux_amd64.run

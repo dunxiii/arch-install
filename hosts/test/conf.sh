@@ -3,7 +3,7 @@
 
 USER="jack"
 USER_GROUPS="wheel,lp"
-HOSTNAME="zentux-test"
+HOSTNAME="zentux"
 TIMEZONE="Europe/Stockholm"
 KEYMAP="sv-latin1"
 LOCALE="en_US.UTF-8"

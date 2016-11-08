@@ -1,0 +1,10 @@
+[Trigger]
+Operation = Upgrade
+Type = Package
+Target = linux
+Target = linux-lts
+
+[Action]
+Description = Rebuilding virtualbox modules then kernel is upgraded
+When = PostTransaction
+Exec = /sbin/rcvboxdrv setup
