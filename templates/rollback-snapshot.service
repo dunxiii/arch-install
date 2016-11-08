@@ -1,14 +1,13 @@
 [Unit]
 Description=rollback LVM snapshot
-Requires=local-fs-pre.target
+Requires=local-fs.target
 DefaultDependencies=no
 Conflicts=shutdown.target
-After=local-fs-pre.target
-Before=local-fs.target
+After=local-fs.target
 
 [Install]
-WantedBy=make-snapshots.target
+WantedBy=rollback-snapshot.target
 
 [Service]
 Type=oneshot
-ExecStart=/usr/bin/lvconvert --merge --yes /dev/vg/snap
+ExecStart=/usr/sbin/lvconvert --merge --yes /dev/mapper/vg-snap ; /usr/sbin/reboot
