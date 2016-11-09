@@ -154,6 +154,12 @@ EOB
 cp templates/*.target "${MOUNT_POINT}/etc/systemd/system/"
 cp templates/*.service "${MOUNT_POINT}/etc/systemd/system/"
 
+for service in templates/*.service; do
+    systemd_services+=(
+        "${service}"
+    )
+done
+
 }
 
 install_python() {
@@ -270,12 +276,11 @@ enable_services() {
 echo -e "\nEnabling services"
 echo -e "----------------------------------------"
 
-for pkg in "${systemd_services[@]}"; do
-    arch-chroot "${MOUNT_POINT}" /bin/bash -c "systemctl enable ${pkg}"
+for service in "${systemd_services[@]}"; do
+    arch-chroot "${MOUNT_POINT}" /bin/bash -c "systemctl enable ${service}"
 done
 
 # And we are done
-
 umount -l "${MOUNT_POINT}"
 
 }
