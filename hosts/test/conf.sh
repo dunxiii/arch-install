@@ -32,6 +32,7 @@ pacstrap_packages+=(
     terminator
 
     # Fonts
+    ttf-dejavu
     ttf-ubuntu-font-family
 
     # i3pystatus deps

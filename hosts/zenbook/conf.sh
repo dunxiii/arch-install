@@ -52,6 +52,7 @@ pacstrap_packages+=(
     zathura-pdf-mupdf
 
     # Fonts
+    ttf-dejavu
     ttf-ubuntu-font-family
 
     # i3pystatus deps
