@@ -156,7 +156,7 @@ cp templates/*.service "${MOUNT_POINT}/etc/systemd/system/"
 
 for service in templates/*.service; do
     systemd_services+=(
-        "${service}"
+        $(basename "${service}")
     )
 done
 
