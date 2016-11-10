@@ -5,6 +5,6 @@ Target = linux
 Target = linux-lts
 
 [Action]
-Description = Rebuilding virtualbox modules then kernel is upgraded
+Description = Rebuilding virtualbox modules
 When = PostTransaction
 Exec = /sbin/rcvboxdrv setup
