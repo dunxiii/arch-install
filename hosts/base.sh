@@ -16,15 +16,17 @@ pacstrap_packages+=(
     intel-ucode
 
     # Desktop base
-    #linux-headers # virtualbox?
+    linux-headers # virtualbox modules
     acpid
     atool # preview archive files
     bind-tools
     borg python-llfuse
     compton
+    connman
     cups
     dosfstools
     dunst
+    ecryptfs-utils
     efibootmgr
     expect
     feh
@@ -35,7 +37,7 @@ pacstrap_packages+=(
     ipcalc
     jq # i3 script deps
     ncdu
-    networkmanager
+    #networkmanager
     nfs-utils
     nmap
     ntfs-3g
@@ -77,6 +79,7 @@ aur_packages+=(
     #telegram-desktop-bin
     #hunspell-sv
     #bcm20702a1-firmware
+    connman-gtk
     pepper-flash
     udftools
 )
@@ -85,7 +88,8 @@ aur_packages+=(
 systemd_services+=(
     # TODO move to host conf?
     acpid.service
-    NetworkManager.service
+    #NetworkManager.service
+    connman.service
     ntpd.service
     iptables.service
     sshd.service
