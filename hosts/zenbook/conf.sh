@@ -25,6 +25,7 @@ pacstrap_packages+=(
     xf86-input-synaptics
 
     # Desktop base
+    arc-gtk-theme
     i3-wm
     i3lock
     polkit-gnome
