@@ -1,3 +1,0 @@
-[Unit]
-Description=Rollback Snapshot
-Requires=multi-user.target
