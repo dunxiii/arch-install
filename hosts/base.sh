@@ -16,7 +16,7 @@ pacstrap_packages+=(
     intel-ucode
 
     # Desktop base
-    linux-headers # virtualbox modules
+    linux-lts-headers # virtualbox modules
     acpid
     atool # preview archive files
     bind-tools
@@ -33,6 +33,7 @@ pacstrap_packages+=(
     git
     gparted
     grub
+    gucharmap
     htop
     ipcalc
     jq # i3 script deps
@@ -49,7 +50,7 @@ pacstrap_packages+=(
     python-pip
     ranger
     reflector
-    redshift python-gobject
+    redshift python-gobject python-xdg
     rofi
     rsync
     scrot

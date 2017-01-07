@@ -16,7 +16,7 @@ DEV_SWAP=/dev/vg/swap
 
 declare -A volumes
 volumes[swap]=1G
-volumes[root]=3G
+volumes[root]=5G
 
 pacstrap_packages+=(
     # Drivers
@@ -55,7 +55,8 @@ aur_packages+=(
 
 virtualbox_guest() {
 pacstrap_packages+=(
-    virtualbox-guest-modules-arch
+    virtualbox-guest-dkms           # for LTS kernel
+    #virtualbox-guest-modules-arch  # for normal kernel
     virtualbox-guest-utils
 )
 

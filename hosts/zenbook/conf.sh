@@ -47,9 +47,11 @@ pacstrap_packages+=(
     gthumb
     libreoffice-still
     smplayer
+    speedtest-cli
     terminator
     transmission-gtk
-    virtviewer
+    virt-viewer
+    youtube-dl
     zathura-pdf-mupdf
 
     # Fonts
@@ -73,11 +75,12 @@ pip_packages+=(
 )
 
 aur_packages+=(
-    #gitkraken
-    #insync
-    #telegram-desktop-bin
-    #hunspell-sv
     #bcm20702a1-firmware
+    #gitkraken
+    #hunspell-sv
+    #telegram-desktop-bin
+    insync
+    openfortivpn
     ttf-font-awesome
 )
 # }}}
@@ -98,11 +101,11 @@ docker_host() {
     USER_GROUPS="${USER_GROUPS},docker"
 }
 virtualbox_host() {
-    virtualbox_host=true
+    virtualbox_host=false
     pacstrap_packages+=(
         qt4
         vagrant
-        #virtualbox # Newer virtualbox is broken with i3,
+        virtualbox # Newer virtualbox is broken with i3,
         # workaround in configure_extra below
     )
 }
@@ -147,7 +150,7 @@ cp hosts/zenbook/templates/iptables.rules "${MOUNT_POINT}/etc/iptables/"
 cp hosts/zenbook/templates/20-intel.conf "${MOUNT_POINT}/usr/share/X11/xorg.conf.d/"
 
 # Touchpad config
-cp hosts/zenbook/templates/70-synaptics.conf "${MOUNT_POINT}/usr/share/X11/xorg.conf.d/"
+cp hosts/zenbook/templates/70-synaptics.conf "${MOUNT_POINT}/etc/X11/xorg.conf.d/"
 
 # Touchpad auto disable
 cp hosts/zenbook/templates/01-touchpad.rules "${MOUNT_POINT}/etc/udev/rules.d/"
@@ -169,12 +172,12 @@ cp hosts/zenbook/templates/hooks/* "${MOUNT_POINT}/etc/pacman.d/hooks/"
 
 # TODO run in chroot
 if [[ "${virtualbox_host}" == true ]]; then
-    wget http://download.virtualbox.org/virtualbox/5.0.28/VirtualBox-5.0.28-111378-Linux_amd64.run
-    chmod +x VirtualBox-5.0.28-111378-Linux_amd64.run
-    ./VirtualBox-5.0.28-111378-Linux_amd64.run
+    wget http://download.virtualbox.org/virtualbox/5.0.30/VirtualBox-5.0.30-112061-Linux_amd64.run
+    chmod +x VirtualBox-5.0.30-112061-Linux_amd64.run
+    ./VirtualBox-5.0.30-112061-Linux_amd64.run
     rm VirtualBox-5.0.28-111378-Linux_amd64.run
-    wget http://download.virtualbox.org/virtualbox/5.0.28/Oracle_VM_VirtualBox_Extension_Pack-5.0.28-111378.vbox-extpack
-    VBoxManage extpack install Oracle_VM_VirtualBox_Extension_Pack-5.0.28-111378.vbox-extpack
+    wget http://download.virtualbox.org/virtualbox/5.0.30/Oracle_VM_VirtualBox_Extension_Pack-5.0.30-112061.vbox-extpack
+    VBoxManage extpack install Oracle_VM_VirtualBox_Extension_Pack-5.0.30-112061.vbox-extpack
 fi
 
 }

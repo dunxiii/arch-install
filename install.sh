@@ -8,9 +8,11 @@ set -e
 
 SECONDS=0
 
+FULL_ENC=false
+
 source ./hosts/base.sh
 #source ./hosts/test/conf.sh
-#source ./hosts/zentux/conf.sh
+source ./hosts/zenbook/conf.sh
 
 export HOSTNAME
 export USER
@@ -38,13 +40,18 @@ parted --script ${DEV} mkpart primary 513MiB 100%
 parted --script ${DEV} set 2 lvm on
 
 # Encrypt data partition
-echo -n "test" | cryptsetup -y luksFormat ${DEV_CRYPT} -
+${FULL_ENC} && \
+    echo -n "test" | cryptsetup -y luksFormat ${DEV_CRYPT} -
 
 # Open encrypted disk
-echo -n "test" | cryptsetup open --type luks ${DEV_CRYPT} lvm -d -
+${FULL_ENC} && \
+    echo -n "test" | cryptsetup open --type luks ${DEV_CRYPT} lvm -d -
 
+# TODO Make better
 # Create Volume Group on disk
-vgcreate vg /dev/mapper/lvm
+${FULL_ENC} && \
+    vgcreate vg /dev/mapper/lvm || \
+    vgcreate vg ${DEV}2
 
 # Create Logical Vomlumes
 for i in "${!volumes[@]}"; do
@@ -71,9 +78,10 @@ mkdir -p "${MOUNT_POINT}/boot/efi"
 mount "${DEV_BOOT}" "${MOUNT_POINT}/boot/efi"
 
 # Crypt file to not have to give passphrase two times
-dd bs=512 count=4 if=/dev/urandom of="${MOUNT_POINT}/crypto_keyfile.bin"
-chmod 000 "${MOUNT_POINT}/crypto_keyfile.bin"
-echo -n "test" | cryptsetup luksAddKey "${DEV_CRYPT}" "${MOUNT_POINT}/crypto_keyfile.bin" -d -
+${FULL_ENC} && \
+    dd bs=512 count=4 if=/dev/urandom of="${MOUNT_POINT}/crypto_keyfile.bin" && \
+    chmod 000 "${MOUNT_POINT}/crypto_keyfile.bin" && \
+    echo -n "test" | cryptsetup luksAddKey "${DEV_CRYPT}" "${MOUNT_POINT}/crypto_keyfile.bin" -d -
 
 # Enable swap
 mkswap "${DEV_SWAP}"
@@ -101,7 +109,7 @@ install_packages() {
 echo -e "\nInstalling packages"
 echo -e "----------------------------------------"
 
-pacstrap "${MOUNT_POINT}" base base-devel "${pacstrap_packages[@]}"
+pacstrap "${MOUNT_POINT}" $(pacman -Sqg base | sed "s/^linux$/&-lts/") base-devel "${pacstrap_packages[@]}"
 
 }
 
@@ -112,7 +120,13 @@ echo -e "----------------------------------------"
 
 genfstab -U "${MOUNT_POINT}" >> "${MOUNT_POINT}/etc/fstab"
 
-arch-chroot "${MOUNT_POINT}" /bin/bash -e <<'EOB'
+THREADS="$(( $(nproc) + 1 ))"
+
+HOOKS="lvm2"
+${FULL_ENC} && \
+    HOOKS="encrypt ${HOOKS}"
+
+arch-chroot "${MOUNT_POINT}" /bin/bash -e <<EOB
 
     # locale & keymap
     echo "en_US.UTF-8 UTF-8"    >> /etc/locale.gen
@@ -128,17 +142,23 @@ arch-chroot "${MOUNT_POINT}" /bin/bash -e <<'EOB'
     # hostname
     hostname "${HOSTNAME}"
     echo "${HOSTNAME}" > /etc/hostname
-    sed -i "s/\(localhost$\)/\1 ${HOSTNAME}/" /etc/hosts
+    sed -i "s/localhost$/& ${HOSTNAME}/" /etc/hosts
 
     # CPU cores for compiling from AUR
-    sed -i -re "/^#MAKEFLAGS/a MAKEFLAGS=\"-j$(( $(nproc) + 1 ))\"" /etc/makepkg.conf
+    sed -i -re "/^#MAKEFLAGS/a MAKEFLAGS=\"-j${THREADS}\"" /etc/makepkg.conf
 
     # colored pacman output
     sed -i "/^#Color/a Color" /etc/pacman.conf
 
+    # ignore packages
+    sed -i -e "/^#IgnorePkg/s/^#//" /etc/pacman.conf
+    sed -i -e "/^IgnorePkg/ s/$/ linux-lts linux-lts-headers/" /etc/pacman.conf
+
     # initramfs
-    sed -i -re "/^HOOKS=/s/block/block encrypt lvm2/g"          /etc/mkinitcpio.conf
-    sed -i -re "s/(FILES=)[^=]*$/\1\"\/crypto_keyfile.bin\"/"   /etc/mkinitcpio.conf
+    ${FULL_ENC} && \
+       sed -i -re "s/(FILES=)[^=]*$/\1\"\/crypto_keyfile.bin\"/"   /etc/mkinitcpio.conf
+
+    sed -i -re "/^HOOKS=/s/block/& ${HOOKS}/"   /etc/mkinitcpio.conf
 
     # disable coredump
     sed -i -re "/^#Storage/a Storage=none" /etc/systemd/coredump.conf
@@ -178,13 +198,19 @@ install_bootloader() {
 echo -e "\nInstalling bootloader"
 echo -e "----------------------------------------"
 
-UUID=$(blkid -s UUID -o value "${DEV_CRYPT}")
+${FULL_ENC} && \
+    UUID=$(blkid -s UUID -o value "${DEV_CRYPT}")
 
 cp templates/grub "${MOUNT_POINT}/etc/default/grub"
 cp templates/custom.cfg "${MOUNT_POINT}/boot/grub/"
 
-sed -i -e "s,\[DEV_CRYPT\],${UUID}," "${MOUNT_POINT}/etc/default/grub"
-sed -i -e "s,\[DEV_CRYPT\],${UUID}," "${MOUNT_POINT}/boot/grub/custom.cfg"
+${FULL_ENC} && \
+    STRING="cryptdevice=UUID=${UUID}:cryptroot" && \
+    sed -i -re "s/(GRUB_CMDLINE_LINUX=)[^=].*$/\1\"${STRING}\"/"   "${MOUNT_POINT}/etc/default/grub" && \
+    sed -i -e "s/rw/& ${STRING} /" "${MOUNT_POINT}/boot/grub/custom.cfg"
+
+${FULL_ENC} && \
+    sed -i -re "/^#GRUB_ENABLE_CRYPTODISK/s/^#//" "${MOUNT_POINT}/etc/default/grub"
 
 arch-chroot "${MOUNT_POINT}" /bin/bash -e <<EOB
 
@@ -196,7 +222,7 @@ EOB
 
 }
 
-create_creation() {
+user_creation() {
 
 echo -e "\nCreating user"
 echo -e "----------------------------------------"
@@ -303,7 +329,7 @@ main() {
     install_python
     configure_extra # Found in host file
     install_bootloader
-    create_creation
+    user_creation
     configure_user_home
     install_aur_packages
     enable_services
